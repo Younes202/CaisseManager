@@ -1,0 +1,101 @@
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="java.util.Map"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="appli.controller.domaine.stock.bean.ChargeDiversBean"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<script src="resources/framework/js/util_file_upload.js?v=1.2"></script>
+
+<script type="text/javascript">
+	$(document).ready(function() {
+		$("#generer_bl").click(function(){
+			executePartialAjax($(this), '<%=EncryptionUtil.encrypt("stock.chargeDivers.generer_numBL")%>', 'chargeDivers.num_bl', true, true, null, true);
+		});
+	});
+</script>
+
+
+
+<style>
+#generic_modal_body{
+	width: 920px;
+	margin-left: -10%;
+}
+</style>
+
+<std:form name="data-form">
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">Fiche dépense</span>
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			<div class="row">
+					<div style="display: none;">
+					<std:select name="num_cheque_all" type="long" key="id" labels="num_cheque" hiddenkey="opc_fournisseur.id" data="${listChequeFournisseur }" style="display:none;" />
+					</div>
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.libelle" />
+						<div class="col-md-6">
+							<std:text name="chargeDivers.libelle" type="string" placeholderKey="chargeDivers.libelle" required="true" maxlength="120"/>
+						</div>
+					</div>	
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.num_bl" />
+						<div class="col-md-4">
+							<std:text name="chargeDivers.num_bl" type="string" placeholderKey="chargeDivers.num_bl" required="true" style="width:50%;width: 200px;float: left;" maxlength="20"/>
+							<a class="refresh-num" id="generer_bl" href="javascript:" title="G&eacute;n&eacute;rer un num&eacute;ro de bon" style="right: 42%">
+			            		<i class="fa fa-refresh"></i>
+			        		</a>
+						</div>
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.montant" />
+						<div class="col-md-4">
+							<std:text name="chargeDivers.montant" type="decimal" placeholderKey="chargeDivers.montant" maxlength="14" style="width: 150px;" required="true"/>
+						</div>
+					</div>
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.type_depense" />
+						<div class="col-md-4">
+							<std:select name="chargeDivers.opc_famille_consommation.id" type="long" key="id" labels="code;'-';libelle" data="${familleConsommation }" isTree="true" required="true" width="100%"/>
+						</div>
+					</div>
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.opc_fournisseur" />
+						<div class="col-md-4">
+							<std:select name="chargeDivers.opc_fournisseur.id" required="true" type="long" key="id" labels="libelle;' ';marque" hiddenkey="id" data="${listeFournisseur }" isTree="true" groupKey="opc_famille.id" groupLabels="opc_famille.code;'-';opc_famille.libelle" width="100%" />
+						</div>
+					</div>	
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" valueKey="chargeDivers.commentaire" />
+						<div class="col-md-4">
+							<std:textarea name="chargeDivers.commentaire" rows="5" cols="50" />
+						</div>
+					</div>
+				</div>
+				<!-- Generic Form -->
+				<jsp:include page="/domaine/administration/dataValue_form.jsp" />
+				<div class="row" style="text-align: center;">
+					<div class="col-md-12">
+						<std:button style="border-radius: 37px;height: 52px;font-size: 21px;" actionGroup="M" closeOnSubmit="true" classStyle="btn btn-success" action="stock.chargeDivers.work_merge" params="isCai=1" icon="fa-save" value="Sauvegarder" />
+						<button style="border-radius: 37px;height: 52px;font-size: 21px;" type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal">
+							<i class="fa fa-times"></i> Fermer
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+</std:form>
+

@@ -1,0 +1,462 @@
+
+package appli.controller.domaine.dashboard.action;
+
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+
+import org.hibernate.criterion.Order;
+
+import appli.controller.domaine.util_erp.ContextAppli.SOFT_ENVS;
+import appli.model.domaine.administration.persistant.EcriturePersistant;
+import appli.model.domaine.caisse.service.IJourneeService;
+import appli.model.domaine.dashboard.service.IDashBoardService;
+import appli.model.domaine.stock.persistant.ArticleStockInfoPersistant;
+import appli.model.domaine.stock.persistant.FamilleCuisinePersistant;
+import appli.model.domaine.stock.persistant.FamillePersistant;
+import appli.model.domaine.stock.persistant.LotArticlePersistant;
+import appli.model.domaine.stock.service.IFamilleService;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.component.complex.table.RequestTableBean;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.annotation.WorkController;
+import framework.model.beanContext.CompteBancairePersistant;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+
+/**
+ * @author 
+ *
+ */
+@WorkController(nameSpace="dash", jspRootPath="/domaine/dashboard_erp/") 
+public class DashBoardAction extends ActionBase {
+	
+	@Inject
+	private IDashBoardService dashBoardService;
+	@Inject
+	private IJourneeService journeeService;
+	@Inject
+	private IFamilleService familleService;
+	
+	/**
+	 * 
+	 * @param httpUtil
+	 */
+	public void work_init(ActionUtil httpUtil)  {
+		Map<String, Integer> mapAlerte = dashBoardService.getMapNbrAlerte();;
+		httpUtil.setMenuAttribute("mapAlerte", mapAlerte);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_journee.jsp");
+	}
+	
+	@Override
+	public void work_edit(ActionUtil httpUtil) {
+		init_dashBoard(httpUtil);
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_VENTESBO(ActionUtil httpUtil){
+		init_ventes_bo(httpUtil);
+		getChiffreVenteBOParCaissier(httpUtil);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_ventes_bo.jsp");
+	}
+	public void init_dashBoard(ActionUtil httpUtil){
+		init_indicateur_repartition(httpUtil);
+		String soft = StrimUtil.getGlobalConfigPropertie("context.soft");
+		boolean isCaisseApp = (SOFT_ENVS.market.toString().equals(soft) || SOFT_ENVS.restau.toString().equals(soft));
+		if(!isCaisseApp) {
+			httpUtil.setDynamicUrl("dash.dashStock.work_init");
+			return;
+		}
+		
+		// Date situation
+		Calendar cal = DateUtil.getCalendar(new Date());
+		String dtDebutSt = (cal.get(Calendar.MONTH)+1)+"/"+cal.get(Calendar.YEAR);
+		httpUtil.setRequestAttribute("curr_sitDebut", (dtDebutSt.length()==6 ? "0"+dtDebutSt:dtDebutSt)); 
+		
+		// Date ecart
+		int mt = cal.get(Calendar.MONTH)+1;
+		String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+		Date dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		Date dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		init_data_vente(httpUtil);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_journee.jsp");
+	}
+	
+	public void init_ventes_bo(ActionUtil httpUtil){
+		
+		List<FamillePersistant> listFamille = (List<FamillePersistant>) familleService.getListeFamille("ST", true, false);
+		Date dtDebut = null, dtFin = null;
+		
+       httpUtil.setRequestAttribute("list_familleStock", listFamille);
+		
+		Long familleId = null;
+		if(StringUtil.isEmpty(httpUtil.getParameter("curr_famille"))) {
+			if(!listFamille.isEmpty()) {
+				familleId = listFamille.get(0).getId();
+			}
+		} else {
+			familleId = httpUtil.getLongParameter("curr_famille");
+		}
+		httpUtil.setRequestAttribute("curr_famille", familleId);
+		
+		// Date début
+		String dateDebutParam = httpUtil.getParameter("rep_dt_debut");
+		if(StringUtil.isEmpty(dateDebutParam)) {
+			Calendar cal = DateUtil.getCalendar(DateUtil.getCurrentDate());
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(dateDebutParam);
+		}
+		// Date fin
+		String dateFinParam = httpUtil.getParameter("rep_dt_fin");
+		if(StringUtil.isEmpty(dateFinParam)) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(dateFinParam);
+		}
+		
+		dtDebut = DateUtil.getStartOfDay(dtDebut);
+		dtFin = DateUtil.getEndOfDay(dtFin);
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		List<Object[]> repVentesParArticle = dashBoardService.getRepartitionVentesParArticle(dtDebut, dtFin,familleId);
+		List<Object[]> repVentesParModePaie = dashBoardService.getRepartitionVenteBOParPaiement(dtDebut, dtFin);
+		httpUtil.setRequestAttribute("repVentesParArticle", repVentesParArticle);
+		httpUtil.setRequestAttribute("repVentesParModePaie", repVentesParModePaie);
+
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_ventes_bo_include.jsp");
+	}
+	
+	public void init_indicateur_repartition(ActionUtil httpUtil){
+		List<FamillePersistant> listFamille = (List<FamillePersistant>) familleService.getListeFamille("CU", true, false);
+		// Ajout menu
+		FamillePersistant fpf = new FamilleCuisinePersistant();
+		fpf.setId(Long.valueOf(-999));
+		fpf.setB_left(1);
+		fpf.setB_right(2);
+		fpf.setCode("MNU");
+		fpf.setLibelle("Menus");
+		fpf.setLevel(2);
+		listFamille.add(0, fpf);
+		//
+		httpUtil.setRequestAttribute("list_famille", listFamille);
+		
+		Long familleId = null;
+		if(StringUtil.isEmpty(httpUtil.getParameter("curr_famille"))) {
+			if(!listFamille.isEmpty()) {
+				familleId = listFamille.get(0).getId();
+			}
+		} else {
+			familleId = httpUtil.getLongParameter("curr_famille");
+		}
+		httpUtil.setRequestAttribute("curr_famille", familleId);
+		//
+		String dtDebut = httpUtil.getParameter("rep_dt_debut");
+		String dtFin = httpUtil.getParameter("rep_dt_fin");
+		Date dateDebut = null;
+		Date dateFin = null;
+		
+		if(StringUtil.isEmpty(dtDebut)){
+			JourneePersistant dateLastJ = journeeService.getLastJournee();
+			Date dateLast = null;
+			if(dateLastJ == null) {
+				dateLast = new Date();
+			} else {
+				dateLast = dateLastJ.getDate_journee();
+			}
+			Calendar cal = DateUtil.getCalendar(dateLast);
+			dtDebut = "01/"+(cal.get(Calendar.MONTH)+1)+"/"+cal.get(Calendar.YEAR);
+		}
+		dateDebut = DateUtil.stringToDate(dtDebut);
+		
+		if(StringUtil.isEmpty(dtFin)){
+			Calendar cal = DateUtil.getCalendar(dateDebut);
+			dtFin = DateUtil.getMaxMonthDate(dateDebut)+"/"+(cal.get(Calendar.MONTH)+1)+"/"+cal.get(Calendar.YEAR);
+		}
+		dateFin = DateUtil.stringToDate(dtFin);
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dateDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dateFin);
+		
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dateDebut);
+    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dateFin);
+    	
+    	if(journeeDebut == null) {
+    		//MessageService.addGrowlMessage("", "Aucune journée ne correspond à ces dates.");
+    		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_repartition_include.jsp");
+    		return;
+    	}
+    	
+		Map mapData = journeeService.getRepartitionVenteArticle(journeeDebut, journeeFin, familleId, false);
+		
+		httpUtil.setRequestAttribute("dataRepartion", mapData);
+		httpUtil.setRequestAttribute("familleId", familleId);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_repartition_include.jsp");
+	}
+	
+	public void init_data_vente(ActionUtil httpUtil){
+		Date dtDebut = null, dtFin = null;
+		// Date début
+		String dateDebutParam = httpUtil.getParameter("rep_dt_debut2");
+		if(StringUtil.isEmpty(dateDebutParam)) {
+			Calendar cal = DateUtil.getCalendar(DateUtil.getCurrentDate());
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(dateDebutParam);
+		}
+		
+		// Date fin
+		String dateFinParam = httpUtil.getParameter("rep_dt_fin2");
+		if(StringUtil.isEmpty(dateFinParam)) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(dateFinParam);
+		}
+		
+		dtDebut = DateUtil.getStartOfDay(dtDebut);
+		dtFin = DateUtil.getEndOfDay(dtFin);
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		List<Object[]> data = dashBoardService.getChiffreVenteCaisseParCaissier(dtDebut, dtFin);
+						
+		httpUtil.setRequestAttribute("dataVente", data);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_repartition_vente_caisse_include.jsp");
+		
+	}
+	
+	public void getChiffreVenteBOParCaissier(ActionUtil httpUtil){
+		Date dtDebut = null, dtFin = null;
+		// Date début
+		String dateDebutParam = httpUtil.getParameter("rep_dt_debut");
+		if(StringUtil.isEmpty(dateDebutParam)) {
+			Calendar cal = DateUtil.getCalendar(DateUtil.getCurrentDate());
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(dateDebutParam);
+		}
+		
+		// Date fin
+		String dateFinParam = httpUtil.getParameter("rep_dt_fin");
+		if(StringUtil.isEmpty(dateFinParam)) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(dateFinParam);
+		}
+		
+		dtDebut = DateUtil.getStartOfDay(dtDebut);
+		dtFin = DateUtil.getEndOfDay(dtFin);
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		List<Object[]> data = dashBoardService.getChiffreVenteBOParCaissier(dtDebut, dtFin);
+						
+		httpUtil.setRequestAttribute("dataVente", data);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_repartition_venteBO_include.jsp");
+		
+	}
+	
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_situation_chiffre(ActionUtil httpUtil){
+		String dtDebut = httpUtil.getParameter("situation_dt_debut");
+		Date dateDebut = null;
+		Date dateFin = null;
+		
+		if(StringUtil.isEmpty(dtDebut)){
+			Calendar cal = DateUtil.getCalendar(new Date());
+			dtDebut = (cal.get(Calendar.MONTH)+1)+"/"+cal.get(Calendar.YEAR);
+		}
+		
+		dateDebut = DateUtil.stringToDate("01/"+dtDebut);
+		dateFin = DateUtil.stringToDate(DateUtil.getMaxMonthDate(dateDebut)+"/"+dtDebut);
+		
+		httpUtil.setRequestAttribute("curr_sitDebut", (dtDebut.length()==6 ? "0"+dtDebut:dtDebut)); 
+		
+		Map<String, Object> infos = dashBoardService.getDataInfos(dateFin);
+		if(infos == null) {
+			infos = new HashMap<>();
+		}
+		httpUtil.setRequestAttribute("dataSituation", infos);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_situation_include.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_banque(ActionUtil httpUtil){
+		List<CompteBancairePersistant> listBanque = (List<CompteBancairePersistant>) dashBoardService.findAll(CompteBancairePersistant.class, Order.asc("libelle"));
+		httpUtil.setRequestAttribute("list_banque", listBanque);
+		
+		Long banqueId = null;
+		
+		if(StringUtil.isEmpty(httpUtil.getParameter("curr_banque"))) {
+			if(!listBanque.isEmpty()) {
+				banqueId = listBanque.get(0).getId();
+			}
+		} else {
+			banqueId = httpUtil.getLongParameter("curr_banque");
+		}
+		
+		httpUtil.setRequestAttribute("curr_banque", banqueId);
+		
+		// Calcul des mois pour le diagramme
+		int month = dashBoardService.getCurrentMonth();
+		String monthStr = "";
+		for(int i=month ; i>month-5; i--) {
+			monthStr += i+",";
+		}
+		httpUtil.setRequestAttribute("monthStr", monthStr);		
+		
+		
+		List<EcriturePersistant> banqueEvolution = dashBoardService.getBanqueEvolution(banqueId);
+		Map<String, List<String>> paiementEvolution = dashBoardService.getRepartiotionPaiementParModePaiement(banqueId);
+
+		httpUtil.setRequestAttribute("compteEvol", banqueEvolution);
+		httpUtil.setRequestAttribute("paiementEvol", paiementEvolution);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/dashboard_banque.jsp");
+	}
+	
+	
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_perte_employe(ActionUtil httpUtil){
+		loadDataEcart(httpUtil);
+		//
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/employe_ecart_livrason_table.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	private void loadDataEcart(ActionUtil httpUtil) {
+		Date dtDebut = null, dtFin = null;
+		
+		// Date début
+		if(StringUtil.isEmpty(httpUtil.getParameter("ecart_dt_debut"))) {
+			Calendar cal = DateUtil.getCalendar(new Date());
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(httpUtil.getParameter("ecart_dt_debut"));
+		}
+		
+		// Date fin
+		if(StringUtil.isEmpty(httpUtil.getParameter("ecart_dt_fin"))) {
+			Calendar cal = DateUtil.getCalendar(new Date());
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(httpUtil.getParameter("ecart_dt_fin"));
+		}
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		List<Object[]> ecartEvolution = dashBoardService.getEcartEmploye(dtDebut, dtFin);
+		ecartEvolution = (ecartEvolution==null) ? new ArrayList<Object[]>() : ecartEvolution;
+		httpUtil.setRequestAttribute("ecartEvol", ecartEvolution);
+		
+		httpUtil.setRequestAttribute("tab_livraison", httpUtil.getParameter("tab_livraison"));
+		
+		List<Object[]> livraisonEmploye = dashBoardService.getLivraisonParutilisateur(dtDebut, dtFin);
+		httpUtil.setRequestAttribute("livraisonEvol", livraisonEmploye);
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void find_articlAlert(ActionUtil httpUtil){
+		find_article_alert(httpUtil);
+		find_article_peremption(httpUtil);
+		//
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/article_alert_list.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void find_article_alert(ActionUtil httpUtil){
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_article_alert");
+		List<ArticleStockInfoPersistant> listData = (List<ArticleStockInfoPersistant>) dashBoardService.findByCriteriaByQueryId(cplxTable, "article_alert_find");
+		httpUtil.setRequestAttribute("list_article", listData);
+		
+		httpUtil.setRequestAttribute("nbrArtTotal", listData.size());
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/article_alert_list.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void find_article_peremption(ActionUtil httpUtil){
+		Date date15jours = DateUtil.addSubstractDate(new Date(), TIME_ENUM.DAY, 15);
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_article_peremption");
+		Map<String, Object> formCriterion = cplxTable.getFormBean().getFormCriterion();
+		formCriterion.put("dateRef", date15jours);
+		List<LotArticlePersistant> listData = (List<LotArticlePersistant>) dashBoardService.findByCriteriaByQueryId(cplxTable, "article_peremption_find");
+		httpUtil.setRequestAttribute("list_article_peremption", listData);
+		
+		cplxTable.setDataExport(listData);
+		cplxTable.setDataSize(listData.size());
+		
+		httpUtil.setRequestAttribute("nbrArtTotalPeremption", cplxTable.getDataSize());
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/article_peremption_list.jsp");
+	}
+	
+	public void deleteLot(ActionUtil httpUtil) {
+//		Long workId = httpUtil.getWorkIdLong();
+//		lotArtService.deleteLot(workId);
+		
+		httpUtil.setDynamicUrl("/domaine/dashboard_erp/article_peremption_list.jsp");
+	}
+	
+}

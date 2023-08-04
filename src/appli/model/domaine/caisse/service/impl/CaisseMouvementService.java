@@ -1,0 +1,429 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package appli.model.domaine.caisse.service.impl;
+
+import java.io.File;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.EntityTransaction;
+import javax.persistence.PersistenceUnit;
+import javax.persistence.Query;
+
+import org.apache.commons.io.FileUtils;
+import org.hibernate.query.criteria.internal.predicate.IsEmptyPredicate;
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.administration.bean.UserBean;
+import appli.controller.domaine.caisse.ContextAppliCaisse;
+import appli.controller.domaine.caisse.bean.CaisseMouvementBean;
+import appli.controller.domaine.stock.bean.MouvementBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.controller.domaine.util_erp.ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM;
+import appli.controller.domaine.util_erp.ContextAppli.TYPE_COMMANDE;
+import appli.model.domaine.caisse.service.ICaisseMouvementService;
+import appli.model.domaine.compta.persistant.PaiementPersistant;
+import appli.model.domaine.stock.persistant.ArticlePersistant;
+import appli.model.domaine.stock.persistant.MouvementArticlePersistant;
+import appli.model.domaine.stock.service.IMouvementService;
+import appli.model.domaine.vente.persistant.CaisseMouvementArticlePersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementOffrePersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementTracePersistant;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.controller.ContextGloabalAppli;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.constante.ProjectConstante.MSG_TYPE;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.BooleanUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+public class CaisseMouvementService extends GenericJpaService<CaisseMouvementBean, Long> implements ICaisseMouvementService{
+	@Inject
+	private IMouvementService mvmService;
+	
+
+	
+	@Override
+	public String generateCodeBarre() {
+		Query query = getNativeQuery("select max(CAST(code_barre AS UNSIGNED)) from caisse_mouvement where code_barre like :startCB")
+				.setParameter("startCB", "888%");
+		BigInteger max_num = (BigInteger)query.getSingleResult();
+		BigInteger code = null;
+		
+		if(max_num != null){
+			code = (max_num.add(new BigInteger("1")));
+		} else{
+			code = new BigInteger("0");
+		}
+		
+		String codeStr = code.toString();
+		
+		while(codeStr.length()<8){
+			codeStr = "0" + codeStr;
+		}
+		
+		if(codeStr.length() < 10){
+			codeStr = "888"+codeStr;
+			int codeCtrl = CHECK_SUM(codeStr)-2;
+			codeStr = codeStr + codeCtrl;
+		}
+		
+		return codeStr;
+	}
+	
+	private int CHECK_SUM (String Input) {
+ 		int evens = 0; //initialize evens variable
+ 		int odds = 0; //initialize odds variable
+ 		int checkSum = 0; //initialize the checkSum
+ 		for (int i = 0; i < Input.length(); i++) {
+ 			//check if number is odd or even
+ 			if ((int)Input.charAt(i) % 2 == 0) { // check that the character at position "i" is divisible by 2 which means it's even
+ 				evens += (int)Input.charAt(i);// then add it to the evens
+ 			} else {
+ 				odds += (int)Input.charAt(i); // else add it to the odds
+ 			}
+ 		}
+ 		odds = odds * 3; //multiply odds by three
+ 		int total = odds + evens; //sum odds and evens
+ 		if (total % 10 == 0){ //if total is divisible by ten, special case
+ 			checkSum = 0;//checksum is zero
+ 		} else { //total is not divisible by ten
+ 			checkSum = 10 - (total % 10); //subtract the ones digit from 10 to find the checksum
+ 		}
+ 		return checkSum;
+ 	}
+	
+	@Override
+	public void deleteImageCodeBarre(CaisseMouvementPersistant mouvement) {
+     	try {
+     		String path = StrimUtil._GET_PATH("codeBarre")+"/temp/"+mouvement.getCode_barre()+".jpg";
+     		if(new File(path).exists()){
+     			FileUtils.forceDelete(new File(path));
+     		}
+		} catch (Exception e) {
+			Logger.getLogger(this.getClass().getName()).log(Level.SEVERE, null, e);
+		}
+     }
+	
+	@Override
+	public CaisseMouvementPersistant getCommandeByCodeBarre(String codeBarre) {
+		return (CaisseMouvementPersistant) getSingleResult(getQuery("from CaisseMouvementPersistant commande "
+				+ "where commande.code_barre=:codeBarre")
+				.setParameter("codeBarre", codeBarre)
+		);
+	}
+	
+	@Override
+	public CaisseMouvementPersistant getCommandeByReference(String ref_commande) {
+		return (CaisseMouvementPersistant) getSingleResult(getQuery("from CaisseMouvementPersistant commande "
+				+ "where commande.ref_commande=:ref_commande")
+				.setParameter("ref_commande", ref_commande));
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<CaisseMouvementPersistant> getListMouvementCaisse(Date dateDebut, Date dateFin) {
+		return getQuery("from CaisseMouvementPersistant where date_vente>=:dateDebut and date_vente<=:dateFin order by date_vente desc")
+			.setParameter("dateDebut", dateDebut)
+			.setParameter("dateFin", dateFin)
+			.getResultList();
+	}
+
+	
+	@Override
+	@Transactional
+	public void mergeRetourCaisse(MouvementBean mouvementBean, List<CaisseMouvementArticlePersistant> listCaisseMvmArt) {
+		CaisseMouvementPersistant commandeP = getCommandeByReference(mouvementBean.getRetour_ref_cmd());
+
+		BigDecimal total_mtt = BigDecimalUtil.ZERO;
+		// calcul montant retour
+		List<MouvementArticlePersistant> listFournArticle = new ArrayList<>();
+		for (CaisseMouvementArticlePersistant mvmDet : listCaisseMvmArt) {
+            if(mvmDet.getQuantite().compareTo(mvmDet.getOld_qte()) == -1){ // si on diminue la quantite
+            	BigDecimal diff = BigDecimalUtil.substract(mvmDet.getOld_qte(), mvmDet.getQuantite());
+            	BigDecimal mtt = BigDecimalUtil.multiply(diff, mvmDet.getPrix_unitaire());
+            	
+            	total_mtt = BigDecimalUtil.add(total_mtt, mtt);
+            	
+            	MouvementArticlePersistant mvmArt = new MouvementArticlePersistant();
+            	ArticlePersistant opc_article = (ArticlePersistant) findById(ArticlePersistant.class, mvmDet.getOpc_article().getId());
+            	BigDecimal tauxVente = BigDecimalUtil.get(ContextGloabalAppli.getGlobalConfig(ContextAppli.PARAM_APPLI_ENUM.TVA_VENTE.toString()));
+            	BigDecimal prix_ttc = BigDecimalUtil.add(opc_article.getPrix_achat_ht(), BigDecimalUtil.multiply(opc_article.getPrix_achat_ht(), BigDecimalUtil.divide(tauxVente, BigDecimalUtil.get(100))));
+            	
+            	mvmArt.setOpc_article(opc_article);
+            	mvmArt.setPrix_ht(opc_article.getPrix_achat_ht());
+            	mvmArt.setPrix_ttc(prix_ttc);
+            	mvmArt.setQuantite(diff);
+            	listFournArticle.add(mvmArt);
+            } 
+        }
+		
+		//erreur si mtt_paiement incoherent avec mtt_rendu au client
+		BigDecimal total_mtt_paiem = null;
+		for (PaiementPersistant paiementP : mouvementBean.getList_paiement()) {
+			total_mtt_paiem = BigDecimalUtil.add(total_mtt_paiem, paiementP.getMontant());
+		}
+		if(total_mtt_paiem != null && total_mtt_paiem.compareTo(total_mtt) != 0) {
+			MessageService.addBannerMessage(MSG_TYPE.ERROR, "La somme des montants des paiements ne correspond pas au montant à rembourser.");
+			return;
+		}
+		
+		if(listFournArticle.size() > 0) {		
+			List<MouvementArticlePersistant> listArticle = new ArrayList<>();
+			if (mouvementBean.getId() != null) {
+				MouvementBean mvmBean = mvmService.findById(mouvementBean.getId());
+				listArticle = mvmBean.getList_article();
+				listArticle.clear();
+			}
+			listArticle.addAll(listFournArticle);
+			mouvementBean.setList_article(listArticle);
+			mouvementBean.setDate_mouvement(new Date());
+			
+			if(mouvementBean.getId() != null) {
+				mouvementBean = mvmService.update(mouvementBean);
+			} else {
+				mvmService.create(mouvementBean);
+			}
+			// On peut avoir plusieurs retours sur une commande
+			if(StringUtil.isEmpty(commandeP.getMvm_retour_ids()) || commandeP.getMvm_retour_ids().indexOf(";"+mouvementBean.getId()+";") == -1){
+				commandeP.setMvm_retour_ids(StringUtil.getValueOrEmpty(commandeP.getMvm_retour_ids())+";"+mouvementBean.getId()+";");
+			}
+		}
+	}
+
+	@Override
+	public List<CaisseMouvementArticlePersistant> getMvmMargeEmploye(Long journeeId, 
+		Date dateDebut, Date dateFin, long userId) {
+		
+		List<CaisseMouvementArticlePersistant> listDet = null;
+		
+		String req = "from CaisseMouvementArticlePersistant det "
+				+ "where "
+				+ "(det.is_annule is null or det.is_annule != 1) "
+				+ "and (det.opc_mouvement_caisse.is_annule is null or det.opc_mouvement_caisse.is_annule != 1) "
+				+ "and det.taux_marge_cai > 0 "
+				+ "and det.opc_mouvement_caisse.mode_paiement is not null "
+				+ "and det.opc_mouvement_caisse.opc_user.id=:userId ";
+		
+		if(journeeId != null) {
+			req += "and det.opc_mouvement_caisse.opc_caisse_journee.opc_journee.id=:journeeId "
+					+ "order by det.id desc";
+			
+			listDet = getQuery(req)
+				.setParameter("journeeId", journeeId)
+				.setParameter("userId", userId)
+				.getResultList();
+		} else {
+			req += "and det.opc_mouvement_caisse.opc_caisse_journee.opc_journee.date_journee>=:dateDebut "
+					+ "and det.opc_mouvement_caisse.opc_caisse_journee.opc_journee.date_journee<=:dateFin "
+					+ "order by det.id desc";
+			
+			listDet = getQuery(req)		
+				.setParameter("dateDebut", dateDebut)
+				.setParameter("dateFin", dateFin)
+				.setParameter("userId", userId)
+				.getResultList();
+		}
+		return listDet;
+	}
+	
+    @PersistenceUnit
+    EntityManagerFactory emf;
+    @Override
+	public void caisseMvmTraceur(CaisseMouvementPersistant caisseMvmPOrigine, EtablissementPersistant etsB, UserBean userBean){
+		if(caisseMvmPOrigine == null){
+			return;
+		}
+		
+		CaisseMouvementTracePersistant caisseMvmTrace = new CaisseMouvementTracePersistant();
+		if(caisseMvmPOrigine.getOpc_caisse_journee() != null && caisseMvmPOrigine.getOpc_caisse_journee().getOpc_caisse() != null){
+			caisseMvmTrace.setCaisse(caisseMvmPOrigine.getOpc_caisse_journee().getOpc_caisse().getReference());
+			caisseMvmTrace.setJournee_id(caisseMvmPOrigine.getOpc_caisse_journee().getOpc_journee().getId());
+		}
+		caisseMvmTrace.setCode_barre(caisseMvmPOrigine.getCode_barre());
+		caisseMvmTrace.setRef_commande(caisseMvmPOrigine.getRef_commande());
+		caisseMvmTrace.setDate_vente(caisseMvmPOrigine.getDate_creation());
+		caisseMvmTrace.setType_commande(caisseMvmPOrigine.getType_commande());
+		caisseMvmTrace.setMtt_donne(caisseMvmPOrigine.getMtt_donne());
+		caisseMvmTrace.setMtt_donne_cheque(caisseMvmPOrigine.getMtt_donne_cheque());
+		caisseMvmTrace.setMtt_donne_cb(caisseMvmPOrigine.getMtt_donne_cb());
+		caisseMvmTrace.setMtt_donne_dej(caisseMvmPOrigine.getMtt_donne_dej());
+		caisseMvmTrace.setMtt_portefeuille(caisseMvmPOrigine.getMtt_portefeuille());
+		caisseMvmTrace.setMtt_donne_point(caisseMvmPOrigine.getMtt_donne_point());
+		caisseMvmTrace.setNbr_donne_point(caisseMvmPOrigine.getNbr_donne_point());
+		caisseMvmTrace.setMtt_reduction(caisseMvmPOrigine.getMtt_reduction());
+		caisseMvmTrace.setMtt_art_offert(caisseMvmPOrigine.getMtt_art_offert());
+		caisseMvmTrace.setMtt_art_reduction(caisseMvmPOrigine.getMtt_art_reduction());
+		caisseMvmTrace.setMtt_marge_caissier(caisseMvmPOrigine.getMtt_marge_caissier());
+		caisseMvmTrace.setMtt_livraison_ttl(caisseMvmPOrigine.getMtt_livraison_ttl());
+		caisseMvmTrace.setMtt_livraison_livr(caisseMvmPOrigine.getMtt_livraison_livr());
+		caisseMvmTrace.setMtt_commande(caisseMvmPOrigine.getMtt_commande());
+		caisseMvmTrace.setMtt_commande_net(caisseMvmPOrigine.getMtt_commande_net());
+		caisseMvmTrace.setMtt_a_rendre(caisseMvmPOrigine.getMtt_a_rendre());
+		caisseMvmTrace.setMtt_donne_all(caisseMvmPOrigine.getMtt_donne_all());
+		caisseMvmTrace.setMode_paiement(caisseMvmPOrigine.getMode_paiement());
+		caisseMvmTrace.setIs_annule(caisseMvmPOrigine.getIs_annule());
+		caisseMvmTrace.setIs_retour(caisseMvmPOrigine.getIs_retour());
+		caisseMvmTrace.setLast_statut(caisseMvmPOrigine.getLast_statut());
+		caisseMvmTrace.setCaisse_cuisine(caisseMvmPOrigine.getCaisse_cuisine());
+		caisseMvmTrace.setIs_imprime(caisseMvmPOrigine.getIs_imprime());
+		
+		caisseMvmTrace.setId_origine(caisseMvmPOrigine.getId());
+		caisseMvmTrace.setDate_journee(caisseMvmPOrigine.getDate_vente());
+		
+		caisseMvmTrace.setSignature(userBean!=null?userBean.getLogin():"");
+		caisseMvmTrace.setOpc_etablissement(etsB);
+		caisseMvmTrace.setEtablissement(etsB!=null?etsB.getNom():"");
+		if(caisseMvmPOrigine.getOpc_user_annul() != null){
+			caisseMvmTrace.setUser_annul(caisseMvmPOrigine.getOpc_user_annul().getLogin());
+		}
+		if(caisseMvmPOrigine.getOpc_user() != null){
+			caisseMvmTrace.setUser_encaiss(caisseMvmPOrigine.getOpc_user().getLogin());
+		}
+		if(caisseMvmPOrigine.getOpc_livreurU() != null){
+			caisseMvmTrace.setLivreur(caisseMvmPOrigine.getOpc_livreurU().getLogin());
+		}
+		if(caisseMvmPOrigine.getOpc_client() != null){
+			caisseMvmTrace.setClient(caisseMvmPOrigine.getOpc_client().getNom());
+		}
+		if(caisseMvmPOrigine.getOpc_serveur() != null){
+			caisseMvmTrace.setServeur(caisseMvmPOrigine.getOpc_serveur().getLogin());
+		}
+		if(caisseMvmPOrigine.getOpc_societe_livr() != null){
+			caisseMvmTrace.setSociete_livr(caisseMvmPOrigine.getOpc_societe_livr().getNom());
+		}
+		if(caisseMvmPOrigine.getOpc_employe() != null){
+			caisseMvmTrace.setEmploye(caisseMvmPOrigine.getOpc_employe().getNom());
+		}
+		
+		StringBuilder sb = new StringBuilder();
+		for(CaisseMouvementArticlePersistant cmart : caisseMvmPOrigine.getList_article()){
+			if(BigDecimalUtil.isZero(cmart.getMtt_total())){
+				continue;
+			}
+			sb.append(
+					cmart.getCode()+"-"+cmart.getLibelle()
+					+(BooleanUtil.isTrue(cmart.getIs_annule()) ? "--------ANNULE : Oui" : "")
+					+(BooleanUtil.isTrue(cmart.getIs_offert()) ? "--------OFFERT : Oui" : "")
+					+"--------REDUCTION : "+BigDecimalUtil.formatNumber(cmart.getMtt_reduction())
+					+"--------TOTAL : "+BigDecimalUtil.formatNumber(cmart.getMtt_total())+"<br>"
+				);
+		}
+		
+		caisseMvmTrace.setArticles(sb.toString());
+		
+		sb = new StringBuilder();
+		for(CaisseMouvementOffrePersistant cmart : caisseMvmPOrigine.getList_offre()){
+			sb.append(
+					(cmart.getOpc_offre()!=null?cmart.getOpc_offre().getLibelle():"")
+					+(BooleanUtil.isTrue(cmart.getIs_annule()) ? "<br>-----------ANNULE : Oui" : "")
+					+"<br>-----------TOTAL : "+BigDecimalUtil.formatNumber(cmart.getMtt_reduction())
+				);
+		}
+		caisseMvmTrace.setOffres(sb.toString());
+		
+		EntityManager em = emf.createEntityManager();
+		EntityTransaction trx = em.getTransaction();
+		try {
+			trx.begin();
+			
+			em.merge(caisseMvmTrace);
+			trx.commit();
+	    } catch(Exception e) {
+	    	trx.rollback();
+	        e.printStackTrace();
+	    } finally {
+	        em.close();
+	    }
+	}
+    
+    @Override
+	public List<CaisseMouvementPersistant> getListCommandes(Long userId, String type, Integer page) {
+		JourneePersistant journee = ContextAppliCaisse.getJourneeBean();
+
+    	String requete = "from CaisseMouvementPersistant caisseMouvement where "
+				+ "type_commande = :type_cmd "
+				+ "and (is_annule is null or is_annule = 0) "
+				+ "and opc_livreurU.id=:livreurId "
+				;
+    	
+    	if("H".equals(type)) {
+    		requete += "and last_statut IN ('"+STATUT_CAISSE_MOUVEMENT_ENUM.ANNUL+"', '"+STATUT_CAISSE_MOUVEMENT_ENUM.LIVRE+"') ";
+    	} else {
+    		requete += "and last_statut NOT IN ('"+STATUT_CAISSE_MOUVEMENT_ENUM.ANNUL+"', '"+STATUT_CAISSE_MOUVEMENT_ENUM.LIVRE+"') "
+    				+ "and date_vente >= :date_ref ";
+    	}
+    	
+    	requete += "order by date_vente desc";
+    	
+		
+		Query query = getQuery(requete)
+				.setParameter("type_cmd", TYPE_COMMANDE.L.toString())
+				.setParameter("livreurId", userId)
+				.setFirstResult(10*page)
+			    .setMaxResults(10);
+		
+		// TODO NULl 
+		
+		
+		if(!"H".equals(type)) {
+			query.setParameter("date_ref", DateUtil.addSubstractDate(journee.getDate_journee(), TIME_ENUM.DAY, -1));
+		}
+		
+		return query.getResultList();
+	}
+    
+    @Override
+    public Map<String, Object> getDataSynthese(Long livreurId, Date dateDebut, Date dateFin){
+    	Map<String, Object> mapData = new HashMap<>();
+    	
+    	if(livreurId == null) {
+    		mapData.put("nbr_cmd", "0");
+    		mapData.put("mtt_cmd", "0.00");
+    		mapData.put("part", "0.00");
+    		
+    		return mapData;
+    	}
+    	
+    	Object[] data = (Object[]) getSingleResult(getQuery("select count(*), "
+    			+ "sum(mtt_livraison_ttl), "
+    			+ "sum(mtt_livraison_livr) "
+    			+ "from CaisseMouvementPersistant caisseMouvement where "
+    			+ "opc_livreurU.id=:livreurId "
+    			+ "and (is_annule is null or is_annule = 0) "
+				+ "and date_vente >= :date_debut "
+				+ "and date_vente <= :date_fin")
+    			.setParameter("livreurId", livreurId)
+    			.setParameter("date_debut", dateDebut)
+    			.setParameter("date_fin", dateFin));
+    	
+		mapData.put("nbr_cmd", BigDecimalUtil.formatNumberZero(BigDecimalUtil.get(""+data[0])));
+		mapData.put("mtt_cmd", BigDecimalUtil.formatNumberZero(BigDecimalUtil.get(""+data[1])));
+		mapData.put("part", BigDecimalUtil.formatNumberZero(BigDecimalUtil.get(""+data[2])));
+		
+    	return mapData;
+    }
+	
+}
+

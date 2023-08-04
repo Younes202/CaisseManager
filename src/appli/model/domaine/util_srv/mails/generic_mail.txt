@@ -1,0 +1,21 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="viewport" content="width=device-width" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>Mail automatique</title>
+</head>
+ 
+<body style="-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:none;height: 100%;background-color:#e4dcdc;">
+
+<!-- HEADER -->
+<table align="center" cellpadding="0" cellspacing="0" style="border: 1px solid #d2cccc;min-width:70%;">
+	<tr>
+		<td style="background-color: #f5f5fd;height: 60px;font-size: 105%;padding-left:15px;border: 1px solid #ebebeb;font-weight: bold;">
+			{1}
+		</td>	
+	</tr>	
+</table>
+
+</body>
+</html>

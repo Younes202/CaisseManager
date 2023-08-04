@@ -1,0 +1,499 @@
+package appli.model.domaine.stock.persistant;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.Index;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.NamedQueries;
+import javax.persistence.NamedQuery;
+import javax.persistence.OneToMany;
+import javax.persistence.OrderBy;
+import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
+import javax.persistence.Transient;
+
+import org.hibernate.annotations.ForeignKey;
+import org.hibernate.annotations.Where;
+
+import appli.model.domaine.administration.persistant.UserPersistant;
+import appli.model.domaine.administration.persistant.ValTypeEnumPersistant;
+import appli.model.domaine.compta.persistant.PaiementPersistant;
+import framework.model.beanContext.BasePersistant;
+import framework.model.beanContext.ComptePersistant;
+import framework.model.beanContext.ExercicePersistant;
+
+@Entity
+@Table(name = "charge_divers", indexes={
+		@Index(name="IDX_CH_DIV_FUNC", columnList="code_func"),
+		@Index(name="IDX_CH_DIV_NUM", columnList="num_bl")
+	})
+@NamedQueries({
+		@NamedQuery(name="chargeDivers_find", query="from ChargeDiversPersistant chargeDivers"
+				+ " where chargeDivers.sens = '{sens}' and (chargeDivers.is_groupant is null or chargeDivers.is_groupant=0) " 
+				+ "and chargeDivers.date_mouvement>='[dateDebut]' "
+				+ "and chargeDivers.date_mouvement<='[dateFin]' "
+				+ "and chargeDivers.opc_travaux.id='[travauxId]' "
+				+ "order by chargeDivers.date_mouvement desc"),
+		
+		@NamedQuery(name="chargeDivers_groupe_find", query="from ChargeDiversPersistant chargeDivers "
+				+ "where chargeDivers.sens = '{sens}' and chargeDivers.is_groupant is not null and chargeDivers.is_groupant=1 "
+				+ "and chargeDivers.date_mouvement>='[dateDebut]' and chargeDivers.date_mouvement<='[dateFin]' " +
+				" order by chargeDivers.date_mouvement desc"),
+		
+		@NamedQuery(name="chargeDivers_tva_find", query="from ChargeDiversPersistant chargeDivers " +
+				" where chargeDivers.opc_tva_enum.id is not null "
+				+ "and chargeDivers.date_mouvement>='[dateDebut]' and chargeDivers.date_mouvement<='[dateFin]' "
+				+ "order by chargeDivers.date_mouvement desc")
+})
+public class ChargeDiversPersistant extends BasePersistant {
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column(nullable = false)
+	private Date date_mouvement;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_facture;
+	@Column(length=1)
+	private String source;//Source de saisie : C=caisse, B=back-office
+	@Column(length = 1)
+	private Boolean is_non_parvenue;
+	@Column
+	private Boolean is_compta;
+	@Column
+	private Boolean is_non_parvenu;
+	@Column(length = 3)
+	private String destination;
+	@Column
+	private Long destination_id;// Travaux=TR, chantier=CH, Sinistre=SN
+	
+//	@Temporal(TemporalType.TIMESTAMP)
+//	private Date date_encaissement;
+	
+	@Column(length = 120)
+	private String libelle;
+	
+	@Column(length = 50)
+	private String num_bl;
+	
+	@Column(length = 15, scale = 6, precision = 15)
+	private  BigDecimal montant;
+	
+	@Column(length = 2)
+	private String sens = "D";
+	
+	@Column(length = 3)
+	private Integer frequence;
+	
+	@Column(length = 20)
+	private Long charge_group_id;// Pour regrouper les depenses
+	@Column(length = 20)
+	private Boolean is_groupant;// Si c'est un pere
+	
+	@Column(length = 1)
+	private String frequence_type;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_debut_auto;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_fin_auto;
+
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_last_auto;
+	
+	@Column
+	private Boolean is_automatique;
+	
+	@Column
+	private Boolean is_active;
+
+	@Column(length = 255)
+	private String commentaire;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_debut_ventil;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_fin_ventil;
+	
+	// Immobilisation -------------------
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_debut_amo;// Début amortissement
+	@Column(length = 3)
+	private Integer nbr_annee_amo;// Nombre d'année amortissement
+	// ----------------------------------	
+		
+	//------------------Copro-----------------//
+	@Column
+	private Boolean is_to_publier;// Publier dans le carnet d'entretien
+	//----------------------------------------//
+	
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "compte_id", referencedColumnName="id")
+	private ComptePersistant opc_compte;
+	
+	@ManyToOne
+	@JoinColumn(name = "travaux_id", referencedColumnName="id")
+	private TravauxPersistant opc_travaux;
+	
+	@OneToMany(cascade=CascadeType.ALL, orphanRemoval=true)
+	@JoinColumn(name="charge_id", referencedColumnName="id")
+	@OrderBy("id ASC")
+	private List<CompteVentilationPersistant> list_ventilation;
+	
+	@Transient
+	private List<ChargeDiversPersistant> list_groupe;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "exercice_id", referencedColumnName="id")
+	private ExercicePersistant opc_exercice; 
+	
+	/************************* Liens **********************/
+	@ManyToOne
+	@JoinColumn(name = "famille_conso_id", referencedColumnName="id")
+	private FamilleConsommationPersistant opc_famille_consommation;
+	
+	@ManyToOne
+	@JoinColumn(name = "tva_enum_id", referencedColumnName="id")
+	private ValTypeEnumPersistant opc_tva_enum;
+	@ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName="id")
+    private UserPersistant opc_user;// User qui a effectuer la charge
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "fournisseur_id", referencedColumnName="id")
+	private FournisseurPersistant opc_fournisseur;
+	@OrderBy("financement_enum")
+	@OneToMany
+	@JoinColumn(name = "elementId", referencedColumnName = "id", insertable=false, updatable=false)
+	@ForeignKey(name = "none")
+	@Where(clause = "source='DEPENSE' or source='RECETTE'")
+	List<PaiementPersistant> list_paiement;
+	/************************* Generic attributes **********************/
+
+	public Date getDate_mouvement() {
+		return date_mouvement;
+	}
+
+	public void setDate_mouvement(Date date_mouvement) {
+		this.date_mouvement = date_mouvement;
+	}
+
+	public String getNum_bl() {
+		return num_bl;
+	}
+
+	public void setNum_bl(String num_bl) {
+		this.num_bl = num_bl;
+	}
+
+	public BigDecimal getMontant() {
+		return montant;
+	}
+
+	public void setMontant(BigDecimal montant) {
+		this.montant = montant;
+	}
+
+	public String getSens() {
+		return sens;
+	}
+
+	public void setSens(String sens) {
+		this.sens = sens;
+	}
+
+	public FamilleConsommationPersistant getOpc_famille_consommation() {
+		return opc_famille_consommation;
+	}
+
+	public void setOpc_famille_consommation(
+			FamilleConsommationPersistant opc_famille_consommation) {
+		this.opc_famille_consommation = opc_famille_consommation;
+	}
+
+	public FournisseurPersistant getOpc_fournisseur() {
+		return opc_fournisseur;
+	}
+
+	public void setOpc_fournisseur(FournisseurPersistant opc_fournisseur) {
+		this.opc_fournisseur = opc_fournisseur;
+	}
+
+	public String getCommentaire() {
+		return commentaire;
+	}
+
+	public void setCommentaire(String commentaire) {
+		this.commentaire = commentaire;
+	}
+
+//	public Date getDate_encaissement() {
+//		return date_encaissement;
+//	}
+//
+//	public void setDate_encaissement(Date date_encaissement) {
+//		this.date_encaissement = date_encaissement;
+//	}
+
+	public Integer getFrequence() {
+		return frequence;
+	}
+
+	public void setFrequence(Integer frequence) {
+		this.frequence = frequence;
+	}
+
+	public Date getDate_debut_auto() {
+		return date_debut_auto;
+	}
+
+	public void setDate_debut_auto(Date date_debut_auto) {
+		this.date_debut_auto = date_debut_auto;
+	}
+
+	public Date getDate_fin_auto() {
+		return date_fin_auto;
+	}
+
+	public void setDate_fin_auto(Date date_fin_auto) {
+		this.date_fin_auto = date_fin_auto;
+	}
+
+	public Boolean getIs_automatique() {
+		return is_automatique;
+	}
+
+	public void setIs_automatique(Boolean is_automatique) {
+		this.is_automatique = is_automatique;
+	}	
+	
+	public Boolean getIs_active() {
+		return is_active;
+	}
+
+	public void setIs_active(Boolean is_active) {
+		this.is_active = is_active;
+	}
+
+	public String getLibelle() {
+		return libelle;
+	}
+
+	public void setLibelle(String libelle) {
+		this.libelle = libelle;
+	}
+
+	public Date getDate_last_auto() {
+		return date_last_auto;
+	}
+
+	public void setDate_last_auto(Date date_last_auto) {
+		this.date_last_auto = date_last_auto;
+	}
+
+	public String getFrequence_type() {
+		return frequence_type;
+	}
+
+	public void setFrequence_type(String frequence_type) {
+		this.frequence_type = frequence_type;
+	}
+
+	public ValTypeEnumPersistant getOpc_tva_enum() {
+		return opc_tva_enum;
+	}
+
+	public void setOpc_tva_enum(ValTypeEnumPersistant opc_tva_enum) {
+		this.opc_tva_enum = opc_tva_enum;
+	}
+
+	public Long getCharge_group_id() {
+		return charge_group_id;
+	}
+
+	public void setCharge_group_id(Long charge_group_id) {
+		this.charge_group_id = charge_group_id;
+	}
+
+	public Boolean getIs_groupant() {
+		return is_groupant;
+	}
+
+	public void setIs_groupant(Boolean is_groupant) {
+		this.is_groupant = is_groupant;
+	}
+	public List<ChargeDiversPersistant> getList_groupe() {
+		return list_groupe;
+	}
+	public void setList_groupe(List<ChargeDiversPersistant> list_groupe) {
+		this.list_groupe = list_groupe;
+	}
+	public List<PaiementPersistant> getList_paiement(){
+		return this.list_paiement;
+	}
+	public Date getDate_facture() {
+		return date_facture;
+	}
+
+	public void setDate_facture(Date date_facture) {
+		this.date_facture = date_facture;
+	}
+
+	public Boolean getIs_compta() {
+		return is_compta;
+	}
+
+	public void setIs_compta(Boolean is_compta) {
+		this.is_compta = is_compta;
+	}
+
+	public Boolean getIs_non_parvenu() {
+		return is_non_parvenu;
+	}
+
+	public void setIs_non_parvenu(Boolean is_non_parvenu) {
+		this.is_non_parvenu = is_non_parvenu;
+	}
+
+	public String getDestination() {
+		return destination;
+	}
+
+	public void setDestination(String destination) {
+		this.destination = destination;
+	}
+
+	public String getSource() {
+		return source;
+	}
+
+	public void setSource(String source) {
+		this.source = source;
+	}
+
+	public UserPersistant getOpc_user() {
+		return opc_user;
+	}
+
+	public void setOpc_user(UserPersistant opc_user) {
+		this.opc_user = opc_user;
+	}
+
+	public Date getDate_debut_ventil() {
+		return date_debut_ventil;
+	}
+
+	public void setDate_debut_ventil(Date date_debut_ventil) {
+		this.date_debut_ventil = date_debut_ventil;
+	}
+
+	public Date getDate_fin_ventil() {
+		return date_fin_ventil;
+	}
+
+	public void setDate_fin_ventil(Date date_fin_ventil) {
+		this.date_fin_ventil = date_fin_ventil;
+	}
+
+	public ExercicePersistant getOpc_exercice() {
+		return opc_exercice;
+	}
+
+	public void setOpc_exercice(ExercicePersistant opc_exercice) {
+		this.opc_exercice = opc_exercice;
+	}
+
+	public ComptePersistant getOpc_compte() {
+		return opc_compte;
+	}
+
+	public void setOpc_compte(ComptePersistant opc_compte) {
+		this.opc_compte = opc_compte;
+	}
+
+	public List<CompteVentilationPersistant> getList_ventilation() {
+		return list_ventilation;
+	}
+
+	public void setList_ventilation(List<CompteVentilationPersistant> list_ventilation) {
+		this.list_ventilation = list_ventilation;
+	}
+
+	public String getPaiementsStr(){
+		List<PaiementPersistant> listP = getList_paiement();
+		String paiementStr = "";
+		if(listP != null){
+			for(PaiementPersistant paiement : getList_paiement()){
+				if(paiement.getOpc_financement_enum() != null){
+					paiementStr = paiementStr + paiement.getOpc_financement_enum().getLibelle()+" | ";
+				}
+			}
+		}
+		
+		return paiementStr;
+	}
+	public void setList_paiement(List<PaiementPersistant> list_paiement) {
+		this.list_paiement = list_paiement;
+	}
+
+	public Long getDestination_id() {
+		return destination_id;
+	}
+
+	public void setDestination_id(Long destination_id) {
+		this.destination_id = destination_id;
+	}
+
+	public Boolean getIs_non_parvenue() {
+		return is_non_parvenue;
+	}
+
+	public void setIs_non_parvenue(Boolean is_non_parvenue) {
+		this.is_non_parvenue = is_non_parvenue;
+	}
+
+	public Boolean getIs_to_publier() {
+		return is_to_publier;
+	}
+
+	public void setIs_to_publier(Boolean is_to_publier) {
+		this.is_to_publier = is_to_publier;
+	}
+
+	public TravauxPersistant getOpc_travaux() {
+		return opc_travaux;
+	}
+
+	public void setOpc_travaux(TravauxPersistant opc_travaux) {
+		this.opc_travaux = opc_travaux;
+	}
+
+	public Date getDate_debut_amo() {
+		return date_debut_amo;
+	}
+
+	public void setDate_debut_amo(Date date_debut_amo) {
+		this.date_debut_amo = date_debut_amo;
+	}
+
+	public Integer getNbr_annee_amo() {
+		return nbr_annee_amo;
+	}
+
+	public void setNbr_annee_amo(Integer nbr_annee_amo) {
+		this.nbr_annee_amo = nbr_annee_amo;
+	}
+}

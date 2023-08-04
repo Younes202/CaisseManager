@@ -1,0 +1,218 @@
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<script type="text/javascript">
+	$(document).ready(function (){
+		$(document).off('click', "a[id^='lnk_det']");
+		$(document).on('click', "a[id^='lnk_det']", function(){
+			var idx = $(this).attr("curr");
+			$("tr[id^='tr_det_']").each(function(){
+				if($(this).attr("id") != "tr_det_"+idx){
+					$(this).hide();
+				}
+			});
+			$("#tr_det_"+idx).toggle(100);
+		});
+		
+		$("#pdf_link").click(function(){
+			$(this).attr("href", $(this).attr("href")+"&dateDebut="+$("#dateDebut").val()+"&dateFin="+$("#dateFin").val());
+		});
+	});
+	
+</script>
+
+<!-- Page Breadcrumb -->
+<div class="page-breadcrumbs breadcrumbs-fixed">
+	<ul class="breadcrumb">
+		<li><i class="fa fa-home"></i> <a href="#">Accueil</a></li>
+		<li>Gestion des ventes</li>
+		<li>Vente avec écart</li>
+		<li class="active">Recherche</li>
+	</ul>
+</div>
+<!-- /Page Breadcrumb -->
+<!-- Page Header -->
+<div class="page-header position-relative">
+	<div class="header-title" style="padding-top: 4px;">
+		
+	</div>
+	<!--Header Buttons-->
+	<jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+	<!--Header Buttons End-->
+</div>
+<!-- /Page Header -->
+
+<!-- Page Body -->
+<div class="page-body">
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+
+<div class="row">
+		<div class="col-lg-12 col-sm-12 col-xs-12">
+			<div class="widget">
+				<div class="widget-main ">
+							<std:form name="search-form">
+								<div class="row">
+							        <div class="form-group">
+							        	<std:label classStyle="control-label col-md-2" value="Date début" />
+							            <div class="col-md-2">
+							                 <std:date name="dateDebut" required="true" value="${dateDebut }"/>
+							            </div>
+							            <div class="col-md-2" style="text-align: center;">
+							            	<std:link action="caisse.caisse.find_ecarts" params="prev=1&is_fltr=1" icon="fa fa-arrow-circle-left" tooltip="Journée précédente" />
+							            	<std:link action="caisse.caisse.find_ecarts" params="next=1&is_fltr=1" icon="fa fa-arrow-circle-right" tooltip="Journée suivante" />
+							            </div>
+							            
+							            <std:label classStyle="control-label col-md-1" value="Date fin" />
+							            <div class="col-md-2">
+							                 <std:date name="dateFin" required="true" value="${dateFin }"/>
+							            </div>
+							            <div class="col-md-2">
+							           	 	<std:button action="caisse.caisse.find_ecarts" value="Filtrer" params="is_fltr=1" classStyle="btn btn-primary" />
+							           	 </div>	
+							           	 <div class="col-md-2">
+								           	 	<std:link id="pdf_link" action="caisse.caisse.editPdfEcart" value="Telecharger Pdf" target="downloadframe" classStyle="btn btn-danger" style="left: 80px; top: -32px;" workId="${caisseV.id}" icon="fa fa-download" />
+								         </div>	
+							       </div>
+							   </div>
+								<!-- Liste des caisses -->
+								<cplx:table name="list_vente_ecart" transitionType="simple" forceFilter="true" width="100%" title="Historique des shifts" initAction="caisse.caisse.find_ecarts" checkable="false" autoHeight="true">
+									<cplx:header>
+										<cplx:th type="date" value="Journée" field="caisseV.opc_journee.date_journee" filterOnly="true"/>
+										<cplx:th type="string" value="Shift" field="caisseV.caisse_id" filtrable="false"/>
+										<cplx:th type="string[]" value="Utilisateur" field="caisseV.opc_user.login" groupValues="${listUser }" groupKey="login" groupLabel="login" />
+										<cplx:th type="integer" value="Nbr. ventes" field="caisseV.nbr_vente" width="70" filtrable="false"/>
+										<cplx:th type="decimal" value="Total" field="caisseV.mtt_total" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Réduction Cmd" field="caisseV.mtt_reduction" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Réduction Art" field="caisseV.mtt_art_reduction" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Art. offert" field="caisseV.mtt_art_offert" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Annulée CMD" field="caisseV.mtt_annule" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Annulée Ligne" field="caisseV.mtt_annule_ligne" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Total net" field="caisseV.mtt_total_net" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Cl&ocirc;ture" field="caisseV.mtt_cloture_caissier" width="80" filtrable="false"/>
+										<cplx:th type="decimal" value="Ecart (-)" width="100" filtrable="false"/>
+										<cplx:th type="decimal" value="Ecart(+)" width="100" filtrable="false"/>
+									</cplx:header>
+									<cplx:body>
+										<c:set var="bigDecimalUtil" value="<%=new BigDecimalUtil() %>"/>
+										<c:set var="oldjour" value="${null }"></c:set>
+										<c:set var="oldCaisse" value="${null }"></c:set>
+										<c:set var="idx" value="${0 }"></c:set>
+										
+										<c:forEach items="${list_caisseMouvement }" var="caisseV">
+											
+											<c:if test="${oldjour == null  or oldjour != caisseV.opc_journee.id }">
+												<c:set var="idx" value="${0 }"></c:set>
+												<c:set var="oldCaisse" value="${null}"></c:set>
+												<tr>
+													<td colspan="13" noresize="true" class="separator-group">
+														<span class="fa fa-fw fa-folder-open-o separator-icon"></span> <fmt:formatDate value="${caisseV.opc_journee.date_journee}"/>
+													</td>
+												</tr>	
+											</c:if>
+											
+											<c:if test="${oldCaisse == null  or oldCaisse != caisseV.opc_caisse.id }">
+												<c:set var="idx" value="${0 }"></c:set>
+												<tr>
+													<td colspan="13" noresize="true" style="padding-left:15px;font-size: 12px;font-weight: bold;color:blue;background-color: #FFF9C4;">
+														<span class="fa fa-fw fa-folder-open-o separator-icon"></span>  ${caisseV.opc_caisse.reference}
+													</td>
+												</tr>
+											</c:if>
+											
+											<c:set var="idx" value="${idx+1 }"></c:set>
+											<c:set var="oldjour" value="${caisseV.opc_journee.id }"></c:set>
+											<c:set var="oldCaisse" value="${caisseV.opc_caisse.id }"></c:set>
+										
+											<cplx:tr workId="${caisseV.id }">
+												<cplx:td style="font-weight:bold;padding-left: 10px;"> 
+													<a href="javascript:" id="lnk_det" curr="${caisseV.id}">+Shift ${idx} [<fmt:formatDate value="${caisseV.date_ouverture}" pattern="HH:mm:ss"/>]</a>
+												</cplx:td>
+												<cplx:td style="font-weight:bold;" value="${caisseV.opc_user.login}"></cplx:td>
+												<cplx:td align="right" value="${caisseV.nbr_vente}"></cplx:td>
+												
+												<cplx:td align="right" value="${caisseV.mtt_total}"></cplx:td>
+												<cplx:td align="right" style="color:green;" value="${caisseV.mtt_reduction}"></cplx:td>
+												<cplx:td align="right" style="color:green;" value="${caisseV.mtt_art_reduction}"></cplx:td>
+												<cplx:td align="right" style="color:green;" value="${caisseV.mtt_art_offert}"></cplx:td>
+												<cplx:td align="right" style="color:red;" value="${caisseV.mtt_annule}"></cplx:td>
+												<cplx:td align="right" style="color:red;" value="${caisseV.mtt_annule_ligne}"></cplx:td>
+												<cplx:td align="right" style="font-weight:bold;" value="${caisseV.mtt_total_net}"></cplx:td>
+												
+												<cplx:td align="right" style="color:#7e3794;font-weight:bold;" value="${bigDecimalUtil.substract(caisseV.mtt_cloture_caissier, caisseV.mtt_ouverture)}"></cplx:td>
+												
+												<c:set var="cloture" value="${caisseV.getEcartCalcule() }" />
+												
+												<cplx:td align="right" style="color:red;font-weight:bold;" value="${cloture<0?cloture:null }"></cplx:td>
+												<cplx:td align="right" style="color:green;font-weight:bold;" value="${cloture>=0?cloture:null }" />
+											</cplx:tr>
+											
+											<tr style="display: none;" id="tr_det_${caisseV.id}" class="sub">
+												<td colspan="13" noresize="true" style="background-color: #fff4d3;cursor: default;" align="center" id="tr_consult_${caisseV.id}">
+														<table style="width: 50%;">
+															<tr style="height: 10px;">
+																<td></td>
+																<td style="background-color: #e2ffff;" width="120">Montant calculé</td>
+																<td style="background-color: #e2ffff;" width="120">Montant cl&ocirc;ture</td>
+															</tr>
+															<tr style="height: 10px;">
+																<td style="background-color: #e2ffff;">Esp&egrave;ces</td>
+																<td align="right" style="color:blue;background-color: white;"><fmt:formatDecimal value="${caisseV.mtt_espece}"/></td>
+																<td style="background-color: white;" align="right"><fmt:formatDecimal zeroVal="true" value="${bigDecimalUtil.substract(caisseV.mtt_cloture_caissier_espece, caisseV.mtt_ouverture)}"/></td>
+															</tr>
+															<tr style="height: 10px;">	
+																<td style="background-color: #e2ffff;">Carte</td>
+																<td align="right" style="color:blue;background-color: white;"><fmt:formatDecimal value="${caisseV.mtt_cb}"/></td>
+																<td style="background-color: white;" align="right"><fmt:formatDecimal zeroVal="true" value="${caisseV.mtt_cloture_caissier_cb}"/></td>
+															</tr>
+															<tr style="height: 10px;">
+																<td style="background-color: #e2ffff;">Ch&egrave;que</td>
+																<td align="right" style="color:blue;background-color: white;"><fmt:formatDecimal value="${caisseV.mtt_cheque}"/></td>
+																<td style="background-color: white;" align="right"><fmt:formatDecimal zeroVal="true" value="${caisseV.mtt_cloture_caissier_cheque}"/></td>
+															</tr>
+															<tr style="height: 10px;">	
+																<td style="background-color: #e2ffff;">Ch&egrave;que déj.</td>
+																<td align="right" style="color:blue;background-color: white;"><fmt:formatDecimal value="${caisseV.mtt_dej}"/></td>
+																<td style="background-color: white;" align="right"><fmt:formatDecimal zeroVal="true" value="${caisseV.mtt_cloture_caissier_dej}"/></td>
+															</tr>
+														</table>
+												</td>
+											</tr>
+										</c:forEach>
+										
+										<c:if test="${!list_caisseMouvement.isEmpty()}">
+											<tr class="sub">
+												<td></td>
+												<td></td> 
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">${mvm_total.nbr_vente }</span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_total }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_reduction }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_art_reduction }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_art_offert }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_annule }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_annule_ligne }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_total_net }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_cloture_caissier }"/></span></td>
+												
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_cloture_old_espece }"/></span></td>
+												<td align="right"><span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue"><fmt:formatDecimal value="${mvm_total.mtt_cloture_old_dej }"/></span></td>
+											</tr>
+										</c:if>	
+									</cplx:body>
+								</cplx:table>
+							</std:form>
+
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>

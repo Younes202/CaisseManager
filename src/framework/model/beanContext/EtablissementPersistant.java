@@ -1,0 +1,766 @@
+package framework.model.beanContext;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Index;
+import javax.persistence.JoinColumn;
+import javax.persistence.Lob;
+import javax.persistence.ManyToOne;
+import javax.persistence.NamedQuery;
+import javax.persistence.OneToMany;
+import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
+import javax.persistence.Transient;
+
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.EncryptionEtsUtil;
+import framework.model.common.util.NumericUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.util.GsonExclude;
+
+@SuppressWarnings("serial")
+@Entity
+@Table(name = "restaurant", indexes={
+		@Index(name="IDX_ETS_NOM", columnList="nom"),
+		@Index(name="IDX_ETS_FUNC", columnList="code_func"),
+		@Index(name="IDX_ETS_AUTH", columnList="code_authentification"),
+		@Index(name="IDX_ETS_RS", columnList="raison_sociale")
+	})
+@NamedQuery(name="etablissement_find", query="from EtablissementPersistant etablissement "
+		+ "where etablissement.opc_societe.id='{SocieteId}' "
+		+ "order by etablissement.nom asc")
+public class EtablissementPersistant implements Serializable {
+    @Id
+    @Column(nullable = false)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(length = 120, nullable = false)
+    private String nom;
+    @Column(length = 120)
+   	private String code_func;
+    @Column(length = 120)
+   	private String dyc_key;// Clé de décryptage
+    @Column(length = 120, nullable = false)
+    private String raison_sociale;
+	@Column(length = 255)
+	private String description;
+	
+    @Column(length = 120, nullable = false)
+    private String code_authentification;
+    @Column(length = 120)
+    private String token;// Token utilisé dans le cloud URL pour destinguer les établissements basés sur l'url
+    @Column(length = 120)
+    private String etape_validation;// Steps validation compte
+    
+    @Column(length = 120)
+    private String type_appli;
+    @Column(length = 120)
+    private String domaine_activite;
+    
+    @Column(length = 250)
+    private String adresse;
+    
+    @Column(length = 150)
+    private String fam_caisse_inv;// Famille d'inventaires caisse
+    
+    @Column(length = 20)
+    private String telephone;
+    
+    @Column(length = 50)
+    private String mail;
+    @Column
+    private Long fam_boisson_chaude;// Code racine boisson chaude
+    @Column
+    private Long fam_boisson_froide;// Code racine boisson froide
+    @Column
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date date_ouverture;
+    @Column
+    private Integer num_facture;// Incrementable du numéro de facture niveau établissement
+    @Column
+    private Boolean is_script_torun;
+    @Column
+    private Boolean is_synchro_cloud;// Si cet établissement doit synchrniser avec le Cloud [Choix alimenté depuis l'option OPTPLUS_SYNCHRO_CLOUD]
+    @Column(length = 150)
+    private String url_distant;
+    @Column(length = 150)
+    private String url_vitrine;// Site vitrine du client
+
+    // COMMANDE EN LIGNE -----------------------------
+    @Column
+    private Boolean is_valid_cpt;// Validation auto du compte
+    @Column
+    private Boolean is_cmd_ets_ferme;// Accepter les commandes même si établissement fermé
+    @Column
+    private Boolean is_valid_auto_esp;// Validation auto commandes espèces
+//    @Column
+//    private Boolean is_valid_auto_cb;// Validation auto commandes carte
+    @Column(length = 3)
+    private Integer duree_cmd;// Duée moyenne de la commande
+    @Column(length = 5)
+    private Integer max_dist;// Maximum distance accéptée
+    @Column(length = 5)
+    private Integer max_heure_cmd;// Maximum heure après date en cours de la commande
+
+    //---------------------------------------------------
+    
+    @Column(length=200)
+    private String pointeuse_db_path;
+    @Column(length=50)
+    private String pointeuse_ip;
+    @Column(length=10)
+    private String pointeuse_port;
+    
+    @Column(length=200)
+    private String titre_publicite;
+    @Lob
+    private String msg_publicite;
+    
+    // Sauvegade DB -------------
+    @Column(length=200)
+    private String save_db_path;
+    @Column(length=5)
+    private String heure_save_db1;
+    @Column(length=5)
+    private String heure_save_db2;
+    //---------------------------
+    
+    // Dans le cas du BO car celles des caisse est ajoutée dans la caisse
+    @Lob
+    private String imprimantes;// Si cloud on stock les imprimantes ici ..|..|..
+    
+    @Lob// Chaine d'abonnement souscrit
+    private String abonnement;
+    
+    // Ces deux attribus sont utilisées dans la conf des réparition des ventes
+	@Column
+	@Lob
+	private String vente_menus_art;
+	@Column(length = 250)
+	private String vente_familles;
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_synchro;// Date dernière check de de l'internet
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_synchro_data;// Date dernière synchro des données avec le cloud
+	
+	@Column(length = 100)
+	private String target_end;// Date écheance
+	@Column(length=20)
+	private String version_soft;
+	
+	@Column(length=160)
+	private String theme_site;
+	
+	@Column(length=255)
+	private String flag_maj;
+    @Transient
+	private String sync_key;
+	@Transient
+	private String sync_opr_id;
+	@Column
+	private Boolean is_disable;
+    
+	@Column(length=120)
+	private String numero_rcs;
+	@Column(length=120)
+	private String numero_ice;
+	@Column(length=120)
+	private String numero_tva;
+	
+    @Column(length = 25, scale = 20, precision = 25)
+	private BigDecimal position_lat;
+    @Column(length = 25, scale = 20, precision = 25)
+	private BigDecimal position_lng;
+
+	//---------------------------------------
+	private Integer annee_construction;
+	private BigDecimal superficie;
+	private Integer nombre_batiment;
+	//---------------------------------------
+	
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "societe_id", referencedColumnName = "id")
+	private SocietePersistant opc_societe;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "abonne_id", referencedColumnName = "id")
+	private AbonnePersistant opc_abonne;
+
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column
+	private Date date_soft;
+	
+	@GsonExclude
+	@OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+	@JoinColumn(name = "etablissement_id", referencedColumnName = "id")
+	List<EtablissementOuverturePersistant> list_ouverture;
+	
+	public String getFlag_maj() {
+		return flag_maj;
+	}
+
+	public void setFlag_maj(String flag_maj) {
+		this.flag_maj = flag_maj;
+	}
+    
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public String getNom() {
+		return nom;
+	}
+
+	public void setNom(String nom) {
+		this.nom = nom;
+	}
+
+	public String getRaison_sociale() {
+		return raison_sociale;
+	}
+
+	public void setRaison_sociale(String raison_sociale) {
+		this.raison_sociale = raison_sociale;
+	}
+
+	public String getAdresse() {
+		return adresse;
+	}
+
+	public SocietePersistant getOpc_societe() {
+		return opc_societe;
+	}
+
+	public void setOpc_societe(SocietePersistant opc_societe) {
+		this.opc_societe = opc_societe;
+	}
+
+	public void setAdresse(String adresse) {
+		this.adresse = adresse;
+	}
+
+	public Date getDate_ouverture() {
+		return date_ouverture;
+	}
+
+	public void setDate_ouverture(Date date_ouverture) {
+		this.date_ouverture = date_ouverture;
+	}
+	
+	public String getNumero_rcs() {
+		return numero_rcs;
+	}	
+	public String getNumero_ice() {
+		return numero_ice;
+	}
+	public String getNumero_tva() {
+		return numero_tva;
+	}
+	
+	public Integer getDuree_cmd() {
+		return duree_cmd;
+	}
+
+	public void setDuree_cmd(Integer duree_cmd) {
+		this.duree_cmd = duree_cmd;
+	}
+
+	public List<EtablissementOuverturePersistant> getList_ouverture() {
+		return list_ouverture;
+	}
+
+	public void setList_ouverture(List<EtablissementOuverturePersistant> list_ouverture) {
+		this.list_ouverture = list_ouverture;
+	}
+
+	public String getTelephone() {
+		return telephone;
+	}
+
+	public void setTelephone(String telephone) {
+		this.telephone = telephone;
+	}
+
+	public String getMail() {
+		return mail;
+	}
+
+	public void setMail(String mail) {
+		this.mail = mail;
+	}
+
+	public String getMsg_publicite() {
+		return msg_publicite;
+	}
+
+	public void setMsg_publicite(String msg_publicite) {
+		this.msg_publicite = msg_publicite;
+	}
+
+	public String getTitre_publicite() {
+		return titre_publicite;
+	}
+
+	public void setTitre_publicite(String titre_publicite) {
+		this.titre_publicite = titre_publicite;
+	}
+
+	public String getVente_menus_art() {
+		return vente_menus_art;
+	}
+
+	public void setVente_menus_art(String vente_menus_art) {
+		this.vente_menus_art = vente_menus_art;
+	}
+
+	public String getVente_familles() {
+		return vente_familles;
+	}
+
+	public void setVente_familles(String vente_familles) {
+		this.vente_familles = vente_familles;
+	}
+
+	public String getCode_authentification() {
+		return code_authentification;
+	}
+
+	public void setCode_authentification(String code_authentification) {
+		this.code_authentification = code_authentification;
+	}
+
+	public String getPointeuse_db_path() {
+		return pointeuse_db_path;
+	}
+
+	public void setPointeuse_db_path(String pointeuse_db_path) {
+		this.pointeuse_db_path = pointeuse_db_path;
+	}
+
+	public Date getDate_synchro() {
+		return date_synchro;
+	}
+
+	public void setDate_synchro(Date date_synchro) {
+		this.date_synchro = date_synchro;
+	}
+
+	public String getTarget_end() {
+		return target_end;
+	}
+
+	public void setTarget_end(String target_end) {
+		this.target_end = target_end;
+	}
+	
+	public Date getTarget_endDecrypt() {
+//		String key = StrimUtil.getGlobalConfigPropertie("client.key");
+		EncryptionEtsUtil encryptionUtil = new EncryptionEtsUtil(EncryptionEtsUtil.getDecrypKey());
+		String var = "01012024";
+		
+		String decrypt = encryptionUtil.decrypt(this.target_end);
+		if(StringUtil.isNotEmpty(this.target_end) && NumericUtil.isNum(decrypt)) {
+			try{	
+				return DateUtil.stringToDate(decrypt, "ddMMyyyy");
+			} catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		return DateUtil.stringToDate(var, "ddMMyyyy");
+	}
+	
+	public Boolean getIs_script_torun() {
+		return is_script_torun;
+	}
+
+	public void setIs_script_torun(Boolean is_script_torun) {
+		this.is_script_torun = is_script_torun;
+	}
+
+	public String getVersion_soft() {
+		return version_soft;
+	}
+
+	public void setVersion_soft(String version_soft) {
+		this.version_soft = version_soft;
+	}
+
+	public Date getDate_soft() {
+		return date_soft;
+	}
+
+	public void setDate_soft(Date date_soft) {
+		this.date_soft = date_soft;
+	}
+
+	public String getAbonnement() {
+		return abonnement;
+	}
+
+	public void setAbonnement(String abonnement) {
+		this.abonnement = abonnement;
+	}
+
+	public String getPointeuse_ip() {
+		return pointeuse_ip;
+	}
+
+	public void setPointeuse_ip(String pointeuse_ip) {
+		this.pointeuse_ip = pointeuse_ip;
+	}
+
+	public String getPointeuse_port() {
+		return pointeuse_port;
+	}
+
+	public void setPointeuse_port(String pointeuse_port) {
+		this.pointeuse_port = pointeuse_port;
+	}
+
+	public String getImprimantes() {
+		return imprimantes;
+	}
+
+	public void setImprimantes(String imprimantes) {
+		this.imprimantes = imprimantes;
+	}
+	public Long getFam_boisson_chaude() {
+		return fam_boisson_chaude;
+	}
+
+	public void setFam_boisson_chaude(Long fam_boisson_chaude) {
+		this.fam_boisson_chaude = fam_boisson_chaude;
+	}
+
+	public Long getFam_boisson_froide() {
+		return fam_boisson_froide;
+	}
+
+	public void setFam_boisson_froide(Long fam_boisson_froide) {
+		this.fam_boisson_froide = fam_boisson_froide;
+	}
+	public String getCode_func() {
+		return code_func;
+	}
+
+	public void setCode_func(String code_func) {
+		this.code_func = code_func;
+	}
+
+	public String getSync_key() {
+		return sync_key;
+	}
+
+	public void setSync_key(String sync_key) {
+		this.sync_key = sync_key;
+	}
+
+	public String getSync_opr_id() {
+		return sync_opr_id;
+	}
+
+	public void setSync_opr_id(String sync_opr_id) {
+		this.sync_opr_id = sync_opr_id;
+	}
+
+	public Boolean getIs_disable() {
+		return is_disable;
+	}
+
+	public void setIs_disable(Boolean is_disable) {
+		this.is_disable = is_disable;
+	}
+
+	public Integer getNum_facture() {
+		return num_facture;
+	}
+
+	public void setNum_facture(Integer num_facture) {
+		this.num_facture = num_facture;
+	}
+
+	public AbonnePersistant getOpc_abonne() {
+		return opc_abonne;
+	}
+
+	public void setOpc_abonne(AbonnePersistant opc_abonne) {
+		this.opc_abonne = opc_abonne;
+	}
+
+	public String getDyc_key() {
+		return dyc_key;
+	}
+
+	public void setDyc_key(String dyc_key) {
+		this.dyc_key = dyc_key;
+	}
+
+	public Date getDate_synchro_data() {
+		return date_synchro_data;
+	}
+
+	public void setDate_synchro_data(Date date_synchro_data) {
+		this.date_synchro_data = date_synchro_data;
+	}
+
+	public String getType_appli() {
+		return type_appli;
+	}
+
+	public void setType_appli(String type_appli) {
+		this.type_appli = type_appli;
+	}
+
+	public String getDomaine_activite() {
+		return domaine_activite;
+	}
+
+	public void setDomaine_activite(String domaine_activite) {
+		this.domaine_activite = domaine_activite;
+	}
+
+	public String getEtape_validation() {
+		return etape_validation;
+	}
+
+	public void setEtape_validation(String etape_validation) {
+		this.etape_validation = etape_validation;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
+	}
+
+	public Integer getAnnee_construction() {
+		return annee_construction;
+	}
+
+	public void setAnnee_construction(Integer annee_construction) {
+		this.annee_construction = annee_construction;
+	}
+
+	public BigDecimal getSuperficie() {
+		return superficie;
+	}
+
+	public void setSuperficie(BigDecimal superficie) {
+		this.superficie = superficie;
+	}
+
+	public Integer getNombre_batiment() {
+		return nombre_batiment;
+	}
+
+	public void setNombre_batiment(Integer nombre_batiment) {
+		this.nombre_batiment = nombre_batiment;
+	}
+
+	public String getToken() {
+		return token;
+	}
+
+	public void setToken(String token) {
+		this.token = token;
+	}
+
+	public Boolean getIs_synchro_cloud() {
+		return is_synchro_cloud;
+	}
+
+	public void setIs_synchro_cloud(Boolean is_synchro_cloud) {
+		this.is_synchro_cloud = is_synchro_cloud;
+	}
+
+	public String getTheme_site() {
+		return theme_site;
+	}
+
+	public void setTheme_site(String theme_site) {
+		this.theme_site = theme_site;
+	}
+	
+	//------------------ THEME-----------------------------
+	
+	public void setNumero_rcs(String numero_rcs) {
+		this.numero_rcs = numero_rcs;
+	}
+
+	public void setNumero_ice(String numero_ice) {
+		this.numero_ice = numero_ice;
+	}
+
+	public void setNumero_tva(String numero_tva) {
+		this.numero_tva = numero_tva;
+	}
+
+	public Boolean getIs_valid_cpt() {
+		return is_valid_cpt;
+	}
+
+	public void setIs_valid_cpt(Boolean is_valid_cpt) {
+		this.is_valid_cpt = is_valid_cpt;
+	}
+
+	public Boolean getIs_cmd_ets_ferme() {
+		return is_cmd_ets_ferme;
+	}
+
+	public void setIs_cmd_ets_ferme(Boolean is_cmd_ets_ferme) {
+		this.is_cmd_ets_ferme = is_cmd_ets_ferme;
+	}
+
+	public Boolean getIs_valid_auto_esp() {
+		return is_valid_auto_esp;
+	}
+
+	public void setIs_valid_auto_esp(Boolean is_valid_auto_esp) {
+		this.is_valid_auto_esp = is_valid_auto_esp;
+	}
+
+	public Integer getMax_dist() {
+		return max_dist;
+	}
+
+	public void setMax_dist(Integer max_dist) {
+		this.max_dist = max_dist;
+	}
+
+	public Integer getMax_heure_cmd() {
+		return max_heure_cmd;
+	}
+
+	public void setMax_heure_cmd(Integer max_heure_cmd) {
+		this.max_heure_cmd = max_heure_cmd;
+	}
+
+	public BigDecimal getPosition_lat() {
+		return position_lat;
+	}
+
+	public void setPosition_lat(BigDecimal position_lat) {
+		this.position_lat = position_lat;
+	}
+
+	public BigDecimal getPosition_lng() {
+		return position_lng;
+	}
+
+	public void setPosition_lng(BigDecimal position_lng) {
+		this.position_lng = position_lng;
+	}
+
+	public String getHeure_save_db1() {
+		return heure_save_db1;
+	}
+
+	public void setHeure_save_db1(String heure_save_db1) {
+		this.heure_save_db1 = heure_save_db1;
+	}
+
+	public String getHeure_save_db2() {
+		return heure_save_db2;
+	}
+
+	public void setHeure_save_db2(String heure_save_db2) {
+		this.heure_save_db2 = heure_save_db2;
+	}
+
+	public String getSave_db_path() {
+		return save_db_path;
+	}
+
+	public void setSave_db_path(String save_db_path) {
+		this.save_db_path = save_db_path;
+	}
+
+	public String getUrl_distant() {
+		return url_distant;
+	}
+
+	public void setUrl_distant(String url_distant) {
+		this.url_distant = url_distant;
+	}
+
+	public String getUrl_vitrine() {
+		return url_vitrine;
+	}
+
+	public void setUrl_vitrine(String url_vitrine) {
+		this.url_vitrine = url_vitrine;
+	}
+
+	public String getFam_caisse_inv() {
+		return fam_caisse_inv;
+	}
+
+	public void setFam_caisse_inv(String fam_caisse_inv) {
+		this.fam_caisse_inv = fam_caisse_inv;
+	}
+
+	public static String[] _THEME_IDS = {
+			"theme_log:CLASSIQUE", 
+			
+			"fond_top:#000000", 
+			"txt_top:#ffffff",
+			
+			"fond_mnu1:#000000", 
+			"fond_mnu2:#000000",
+			"fond_mnu3:#000000",
+			
+			"icon_mnu1:#2dc3e8",
+			"icon_mnu2:#53a93f",
+			"icon_mnu3:#e95324",
+			
+			"txt_mnu1:#ffffff",
+			"txt_mnu2:#ffffff", 
+			"txt_mnu3:#e4c75c",
+			
+			"fond_mnu1_select:#e95324", 
+			"fond_mnu2_select:#4d4d4d",
+			"fond_mnu3_select:#4d4d4d",
+			"img_fond:"
+			};
+	
+	public String getThemeDet(String key) {
+		int idx = -1;
+		String[] themeArray = new String[11];
+		if(StringUtil.isNotEmpty(this.getTheme_site())) {
+			themeArray = StringUtil.getArrayFromStringDelim(this.getTheme_site(), "|");
+		}
+		//
+		for (String themeId : EtablissementPersistant._THEME_IDS) {
+			String[] det = StringUtil.getArrayFromStringDelim(themeId, ":");
+			idx++;
+			if(!det[0].equals(key)) {
+				continue;
+			}
+			String val = (idx>themeArray.length-1 || StringUtil.isEmpty(themeArray[idx])) ?  det[1] : themeArray[idx];
+			
+			return val;
+		}
+		return null;
+	}
+}

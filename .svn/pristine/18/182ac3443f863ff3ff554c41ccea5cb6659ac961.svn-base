@@ -1,0 +1,522 @@
+package appli.controller.domaine.administration.action;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+
+import org.hibernate.criterion.Order;
+
+import appli.controller.domaine.administration.bean.CompteBancaireBean;
+import appli.controller.domaine.administration.bean.ValTypeEnumBean;
+import appli.controller.domaine.compta.bean.CompteBean;
+import appli.controller.domaine.stock.action.ChargeDiversAction;
+import appli.controller.domaine.stock.action.MouvementAction;
+import appli.controller.domaine.stock.bean.FournisseurChequeBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.persistant.EcriturePersistant;
+import appli.model.domaine.administration.persistant.ValTypeEnumPersistant;
+import appli.model.domaine.administration.service.IClientService;
+import appli.model.domaine.administration.service.ICompteBancaireService;
+import appli.model.domaine.administration.service.IValTypeEnumService;
+import appli.model.domaine.compta.persistant.PaiementPersistant;
+import appli.model.domaine.compta.service.ICompteService;
+import appli.model.domaine.personnel.persistant.ClientPersistant;
+import appli.model.domaine.stock.persistant.FournisseurChequePersistant;
+import appli.model.domaine.stock.persistant.FournisseurPersistant;
+import appli.model.domaine.stock.service.IFournisseurChequeService;
+import appli.model.domaine.stock.service.IFournisseurService;
+import framework.component.complex.table.RequestTableBean;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.annotation.WorkController;
+import framework.controller.annotation.WorkForward;
+import framework.model.beanContext.CompteBancairePersistant;
+import framework.model.beanContext.ComptePersistant;
+import framework.model.beanContext.VillePersistant;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.StringUtil;
+import framework.model.util.ModelConstante;
+
+@WorkController(nameSpace = "admin", bean = CompteBancaireBean.class, jspRootPath = "/domaine/administration/")
+public class CompteBancaireAction extends ActionBase {
+	@Inject 
+	private ICompteBancaireService compteBancaireService;
+	@Inject
+	private IFournisseurChequeService fournisseurChequeService;
+	@Inject
+	private IValTypeEnumService valEnumService;
+	@Inject
+	private ICompteService compteService;
+	@Inject
+	private IClientService clientService;
+	@Inject
+	private IFournisseurService fournisseurService;
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void work_init(ActionUtil httpUtil){
+		httpUtil.setRequestAttribute("SKIP_CLEAR_VALIDATOR", true);
+		
+		httpUtil.setRequestAttribute("typeCompteArray", new String[][]{{"CDEP","Compte bancaire de dépôts"}, {"CPOS", "Compte chèques postaux"}, {"CTER","Compte à terme"}, {"CAIS","Caisse"}, {"AUT", "Autres"}});
+		if(httpUtil.isEditionPage()){
+			
+			MessageService.getGlobalMap().put("NO_ETS", true);
+			httpUtil.setRequestAttribute("listVille", compteBancaireService.getListData(VillePersistant.class, "opc_region.libelle, libelle"));
+			MessageService.getGlobalMap().remove("NO_ETS");
+
+			Long banqueId = httpUtil.getWorkIdLong();
+			if(banqueId != null){
+				httpUtil.setMenuAttribute("banqueId", banqueId);
+			} else{
+				banqueId = (Long)httpUtil.getMenuAttribute("banqueId");
+			}
+			if(!httpUtil.isCreateAction()){
+				// Gérer le retour sur cet onglet
+				banqueId = (Long)httpUtil.getMenuAttribute("banqueId");
+				if(banqueId != null && !httpUtil.isCrudOperation()){
+					loadBean(httpUtil, banqueId);
+				}
+			} else{
+				httpUtil.removeMenuAttribute("banqueId");
+			}
+		}
+	}
+	
+	@Override
+	public void work_find(ActionUtil httpUtil) {
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_compteBancaire");
+		List<CompteBancairePersistant> listData = (List<CompteBancairePersistant>) compteBancaireService.findByCriteriaByQueryId(cplxTable, ("compteBancaire_find"));
+		//
+		for (CompteBancairePersistant comptePersistant : listData) {
+			BigDecimal solde = compteBancaireService.getSoldeCompte(comptePersistant.getId());
+			comptePersistant.setMtt_solde(solde);
+		}
+
+		httpUtil.setRequestAttribute("list_compteBancaire", listData);
+		
+		httpUtil.setDynamicUrl("/domaine/administration/compteBancaire_list.jsp");
+	}
+	
+	/**
+	 * Gestion commune des paiements
+	 * @param httpUtil
+	 */
+	public void loadPaiementPopup(ActionUtil httpUtil){
+		 List<ValTypeEnumBean> listeFinancement = valEnumService.getListValeursByType(ModelConstante.ENUM_FINANCEMENT);
+		 httpUtil.setRequestAttribute("listeFinancement", listeFinancement);
+		 httpUtil.setRequestAttribute("listeBanque", compteBancaireService.findAll());
+		 List<FournisseurChequeBean> listChequeFournisseur = fournisseurChequeService.getListChequeFournisseurActifs(null, null);
+		 httpUtil.setRequestAttribute("listChequeFournisseur", listChequeFournisseur);
+			
+		 httpUtil.setDynamicUrl("/domaine/compta/paiement_edit.jsp");
+	}
+	public void mergePaiementPopup(ActionUtil httpUtil){
+		List<PaiementPersistant> listPaiement = (List<PaiementPersistant>) httpUtil.buildListBeanFromMap("xxxx", "opc_financement_enum.id",PaiementPersistant.class, "idxIhm",
+				"opc_financement_enum.id", "num_virement", "montant", "num_cheque","opc_fournisseurCheque.id",
+				"opc_compte_bancaire.id", "date_echeance");
+		//
+		for (PaiementPersistant paiementPersistant : listPaiement) {
+			if(paiementPersistant.getOpc_compte_bancaire() != null && paiementPersistant.getOpc_compte_bancaire().getId() != null){
+				paiementPersistant.setOpc_compte_bancaire((CompteBancairePersistant) compteBancaireService.findById(CompteBancairePersistant.class, paiementPersistant.getOpc_compte_bancaire().getId()));
+			}
+			if(paiementPersistant.getOpc_financement_enum() != null && paiementPersistant.getOpc_financement_enum().getId() != null){
+				paiementPersistant.setOpc_financement_enum((ValTypeEnumPersistant) compteBancaireService.findById(ValTypeEnumPersistant.class, paiementPersistant.getOpc_financement_enum().getId()));
+			}
+			if(paiementPersistant.getOpc_fournisseurCheque() != null && paiementPersistant.getOpc_fournisseurCheque().getId() != null){
+				paiementPersistant.setOpc_fournisseurCheque((FournisseurChequePersistant) compteBancaireService.findById(FournisseurChequePersistant.class, paiementPersistant.getOpc_fournisseurCheque().getId()));
+			}
+		}
+		//
+		int idx = 1;
+		for (PaiementPersistant paiementPersistant : listPaiement) {
+			if(paiementPersistant.getOpc_compte_bancaire() == null){
+				MessageService.addBannerMessage("Ligne "+idx+" : Le compte est obligatoire.");
+			}
+			if(paiementPersistant.getMontant() == null){
+				MessageService.addBannerMessage("Ligne "+idx+" : Le montant est obligatoire.");
+			}
+			if(paiementPersistant.getOpc_financement_enum().getCode().equals("CHEQUE") && StringUtil.isEmpty(paiementPersistant.getNum_cheque())){
+				MessageService.addBannerMessage("Ligne "+idx+" : Le numéro de chèque est obligatoire.");
+			} else if(paiementPersistant.getOpc_financement_enum().getCode().equals("CHEQUE_F") && paiementPersistant.getOpc_fournisseurCheque() == null){
+				MessageService.addBannerMessage("Ligne "+idx+" : Le chèque fournisseur est obligatoire.");
+			} else if(paiementPersistant.getOpc_financement_enum().getCode().equals("VIREMENT") && StringUtil.isEmpty(paiementPersistant.getNum_virement())){
+				MessageService.addBannerMessage("Ligne "+idx+" : Le numéro de virement est obligatoire.");
+			}
+			idx++;
+		}
+		if(MessageService.isError()){
+			return;
+		}
+		
+		httpUtil.setMenuAttribute("PAIEMENT_DATA", listPaiement);
+		
+		httpUtil.setDynamicUrl("/domaine/compta/paiement_consult.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void checked_pointe(ActionUtil httpUtil) {
+		httpUtil.setRequestAttribute("currentDate", DateUtil.getCurrentDate());
+		httpUtil.setRequestAttribute("elementId", httpUtil.getWorkId());
+		
+		httpUtil.setDynamicUrl("/domaine/stock/mouvement_pointe_popup.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	@WorkForward(useBean=true)
+	public void pointerCheque(ActionUtil httpUtil) {
+		String tp = (String)httpUtil.getMenuAttribute("tp");
+		Long elementId = httpUtil.getWorkIdLong();
+		
+		if(elementId == null) {
+			boolean isDepense = StringUtil.isTrue(httpUtil.getParameter("is_dep"));
+			Long mvmId = Long.valueOf(httpUtil.getParameter("mvm"));
+			if(!isDepense){
+				elementId = mvmId;
+			} else{
+				elementId = mvmId;
+			}
+			compteBancaireService.pointerCheque(elementId, null);
+		} else {
+			String dateSt = httpUtil.getRequest().getParameter("date_encaissement");
+			Date datePointage = DateUtil.stringToDate(dateSt);
+			//
+			compteBancaireService.pointerCheque(elementId, datePointage);
+			PaiementPersistant paiementP = (PaiementPersistant) compteBancaireService.findById(PaiementPersistant.class, elementId);
+			httpUtil.setMenuAttribute("fournId", paiementP.getOpc_fournisseur().getId());
+		}
+		if(tp.equals("nonp")) {
+			httpUtil.setMenuAttribute("tp", "p");
+			gestion_cheque_pointe(httpUtil);
+		} else {//-----------------------------------------------------------------------------------------------
+			httpUtil.setMenuAttribute("tp", "nonp");
+			gestion_cheque_nonpointe(httpUtil);
+		}
+		
+		httpUtil.setDynamicUrl("/domaine/stock/gestion_cheque_list.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void gestion_cheque(ActionUtil httpUtil) {
+		String tp = httpUtil.getParameter("tp");
+		if(StringUtil.isNotEmpty(tp)) {
+			httpUtil.setMenuAttribute("tp", tp);
+		}
+		tp = (String)httpUtil.getMenuAttribute("tp");
+		
+		List<FournisseurPersistant> listFournisseur = (List<FournisseurPersistant>) compteBancaireService.findAll(FournisseurPersistant.class, Order.asc("libelle"));
+		
+		// Ajouter autres
+		FournisseurPersistant fP = new FournisseurPersistant();
+		fP.setId(new Long(-999));
+		fP.setLibelle("Sans fournisseur");
+		listFournisseur.add(fP);
+		
+		httpUtil.setRequestAttribute("listFournisseur", listFournisseur);
+		
+		if(tp.equals("nonp")) {
+			gestion_cheque_nonpointe(httpUtil);
+		} else {//-----------------------------------------------------------------------------------------------
+			gestion_cheque_pointe(httpUtil);
+		}
+		
+		httpUtil.setDynamicUrl("/domaine/stock/gestion_cheque_list.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	private void gestion_cheque_nonpointe(ActionUtil httpUtil) {
+		RequestTableBean cplxTableNonPointe = getTableBean(httpUtil, "list_cheque_nonpointe");
+		List<PaiementPersistant> listDataNonPointe = (List<PaiementPersistant>) compteBancaireService.findByCriteriaByQueryId(cplxTableNonPointe, "cheques_non_pointes_find");
+		
+		List<PaiementPersistant> listDataNonPointeAll = (List<PaiementPersistant>) compteBancaireService.findByCriteriaByQueryId(cplxTableNonPointe, "cheques_non_pointes_find", false);
+		BigDecimal ttl_Nonpointe = null;
+		//
+		for (PaiementPersistant mvp : listDataNonPointeAll) {
+			ttl_Nonpointe = BigDecimalUtil.add(ttl_Nonpointe, mvp.getMontant());
+		}
+		httpUtil.setRequestAttribute("ttl_non_pointe", ttl_Nonpointe);
+		httpUtil.setRequestAttribute("listDataNonPointe", listDataNonPointe);
+	}
+	/**
+	 * @param httpUtil
+	 */
+	private void gestion_cheque_pointe(ActionUtil httpUtil) {
+		List<FournisseurPersistant> listFourn = (List<FournisseurPersistant>) compteBancaireService.findAll(FournisseurPersistant.class, Order.asc("libelle"));
+		RequestTableBean cplxTablePointe = getTableBean(httpUtil, "list_cheque_pointe");
+		BigDecimal ttl_pointe = null;
+		
+		Long fournId = httpUtil.getLongParameter("fournisseur");
+		if(fournId == null && httpUtil.getMenuAttribute("fournId") != null){
+			fournId = (Long) httpUtil.getMenuAttribute("fournId");
+			httpUtil.removeMenuAttribute("fournId");
+		} else if(fournId == null && (listFourn != null && listFourn.size() > 0)){
+			fournId = listFourn.get(0).getId();
+		}
+		httpUtil.setRequestAttribute("fournId", fournId);
+		httpUtil.setRequestAttribute("listFournisseur", listFourn);
+		
+		if(fournId != null && fournId != -999){
+			cplxTablePointe.getFormBean().getFormCriterion().put("fournId", fournId);
+		}
+		
+		// Mouvement
+		List<PaiementPersistant> listDataPointe = (List<PaiementPersistant>) compteBancaireService.findByCriteriaByQueryId(cplxTablePointe, "cheques_pointes_find");
+		List<PaiementPersistant> listDataPointeAll = (List<PaiementPersistant>) compteBancaireService.findByCriteriaByQueryId(cplxTablePointe, "cheques_pointes_find", false);
+		//
+		for (PaiementPersistant mvp : listDataPointeAll) {
+			ttl_pointe = BigDecimalUtil.add(ttl_pointe, mvp.getMontant());
+		}
+		httpUtil.setRequestAttribute("ttl_pointe", ttl_pointe);
+		httpUtil.setRequestAttribute("listDataPointe", listDataPointe);
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void find_ecriture_livre(ActionUtil httpUtil){
+		String[][] sourceArray = {{"ACHAT", "ACHAT"}, {"VENTE", "VENTE"}, {"DEPENSE", "DEPENSE"}, 
+				{"RECETTE", "RECETTE"}, {"TRANSFERT", "TRANSFERT"}, {"CAISSE", "CAISSE"}};
+		httpUtil.setRequestAttribute("sourceArray", sourceArray);
+		List<?> listCompteBancaire = compteBancaireService.findAll(Order.asc("libelle"));
+		httpUtil.setRequestAttribute("listeBanque", listCompteBancaire);
+		
+		Long compteBanqueId = (Long)httpUtil.getMenuAttribute("banqueId");
+		RequestTableBean cplxTableEcriture = getTableBean(httpUtil, "list_ecriture_compte");
+		// Si on n'est pas dans le module compte bancaire
+		if(compteBanqueId == null) {
+			compteBanqueId = httpUtil.getLongParameter("compte.id");
+		}
+		// Premier compte de la liste
+		if(compteBanqueId == null && listCompteBancaire.size() > 0){
+			compteBanqueId = ((CompteBancairePersistant)listCompteBancaire.get(0)).getId();
+		}
+		
+		Date dateDebut = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateDebut"));
+		Date dateFin = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateFin"));
+		
+		if(dateDebut == null) {
+			dateDebut = new Date();
+			dateFin = new Date();
+			httpUtil.getDate("dateDebut").setValue(dateDebut);
+			httpUtil.getDate("dateFin").setValue(dateDebut);
+		}
+		
+		if(httpUtil.getParameter("prev") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, -1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, -1);
+		} else if(httpUtil.getParameter("next") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, 1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, 1);
+		}
+		
+		dateDebut = DateUtil.getStartOfDay(dateDebut);
+		dateFin = DateUtil.getEndOfDay(dateFin);
+		
+		httpUtil.setRequestAttribute("dateDebutSt", DateUtil.dateToString(dateDebut));
+		httpUtil.setRequestAttribute("dateDebut", dateDebut);
+		httpUtil.setRequestAttribute("dateFinSt", DateUtil.dateToString(dateFin));
+		httpUtil.setRequestAttribute("dateFin", dateFin);
+		
+		String req = "from EcriturePersistant ecritureBanque where 1=1 ";
+		Map<String, Object> formCriterion = cplxTableEcriture.getFormBean().getFormCriterion();
+		if(StringUtil.isNotEmpty(compteBanqueId)) {
+			req = req + "and ecritureBanque.opc_banque.id='[cptId]' ";
+			formCriterion.put("cptId", compteBanqueId);
+		}
+		if(StringUtil.isNotEmpty(dateDebut)) {
+			req = req + "and date_mouvement>='[dateDebut]' ";
+			formCriterion.put("dateDebut", dateDebut);
+		}
+		if(StringUtil.isNotEmpty(dateFin)) {
+			req = req + "and date_mouvement<='[dateFin]' ";
+			formCriterion.put("dateFin", dateFin);
+		}
+		req = req + "order by ecritureBanque.date_mouvement desc, ecritureBanque.source, ecritureBanque.libelle";
+		
+		BigDecimal soldeActuelDate = compteBancaireService.getSoldeCompte(compteBanqueId, dateFin);
+		httpUtil.setRequestAttribute("soldeActuelDate", soldeActuelDate);
+		BigDecimal soldeActuel = compteBancaireService.getSoldeCompte(compteBanqueId);
+		httpUtil.setRequestAttribute("soldeActuel", soldeActuel);
+		
+		List<EcriturePersistant> listEcriture = (List<EcriturePersistant>) compteBancaireService.findByCriteria(cplxTableEcriture, req, false);
+		httpUtil.setRequestAttribute("list_ecriture", listEcriture);
+		
+		httpUtil.setDynamicUrl("/domaine/administration/compteEcriture_livre_list.jsp");		
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void find_ecriture_journal(ActionUtil httpUtil){
+		String[][] sourceArray = {{"ACHAT", "ACHAT"}, {"VENTE", "VENTE"}, {"DEPENSE", "DEPENSE"}, 
+				{"RECETTE", "RECETTE"}, {"TRANSFERT", "TRANSFERT"}, {"CAISSE", "CAISSE"}};
+		httpUtil.setRequestAttribute("sourceArray", sourceArray);
+		List<?> listCompteBancaire = compteBancaireService.findAll(Order.asc("libelle"));
+		httpUtil.setRequestAttribute("listeBanque", listCompteBancaire);
+		
+		List<CompteBean> listCompte = compteService.getListCompteByCode("14%");
+		listCompte.addAll(compteService.getListCompteByCode("39%"));
+		
+		httpUtil.setRequestAttribute( "listClient", clientService.findAll(Order.asc("numero")));
+		httpUtil.setRequestAttribute( "listFournisseur", fournisseurService.findAll(Order.asc("numero")));
+		httpUtil.setRequestAttribute( "listCompte", listCompte);
+
+
+		Long compteBanqueId = (Long)httpUtil.getMenuAttribute("banqueId");
+		RequestTableBean cplxTableEcriture = getTableBean(httpUtil, "list_ecriture_compte");
+		// Si on n'est pas dans le module compte bancaire
+		if(compteBanqueId == null) {
+			compteBanqueId = httpUtil.getLongParameter("compte.id");
+		}
+		// Premier compte de la liste
+		if(compteBanqueId == null && listCompteBancaire.size() > 0){
+			compteBanqueId = ((CompteBancairePersistant)listCompteBancaire.get(0)).getId();
+		}
+		
+		String source = httpUtil.getParameter("compte.source");
+		Date dateDebut = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateDebut"));
+		Date dateFin = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateFin"));
+		
+		
+		Long compteId = httpUtil.getLongParameter("compte");
+		Long clientId = httpUtil.getLongParameter("client");
+		Long fournisseurId = httpUtil.getLongParameter("fournisseur");
+		
+		Long compteClientId = null;
+		if(clientId != null) {
+			ComptePersistant opc_compte = clientService.findById(ClientPersistant.class, clientId).getOpc_compte();
+			compteClientId = (opc_compte != null ? opc_compte.getId() : null);
+		}
+		Long compteFournId = null;
+		if(fournisseurId != null) {
+			ComptePersistant opc_compte = clientService.findById(FournisseurPersistant.class, fournisseurId).getOpc_compte();
+			compteFournId = (opc_compte != null ? opc_compte.getId() : null);
+		}
+		
+		if(dateDebut == null) {
+			dateDebut = DateUtil.addSubstractDate(new Date(), TIME_ENUM.DAY, -365);
+			dateFin = DateUtil.getCurrentDate();
+			
+			httpUtil.getDate("dateDebut").setValue(dateDebut);
+			httpUtil.getDate("dateFin").setValue(dateFin);
+		}
+		
+		if(httpUtil.getParameter("prev") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, -1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, -1);
+		} else if(httpUtil.getParameter("next") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, 1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, 1);
+		}
+		
+		dateDebut = DateUtil.getStartOfDay(dateDebut);
+		dateFin = DateUtil.getEndOfDay(dateFin);
+		
+		httpUtil.setRequestAttribute("dateDebutSt", DateUtil.dateToString(dateDebut));
+		httpUtil.setRequestAttribute("dateDebut", dateDebut);
+		httpUtil.setRequestAttribute("dateFin", dateFin);
+		
+		httpUtil.setRequestAttribute("client", compteClientId);
+		httpUtil.setRequestAttribute("fournisseur", compteFournId);
+		httpUtil.setRequestAttribute("compte", compteId);
+		
+		
+		String req = "from EcriturePersistant ecritureBanque where 1=1 ";
+		Map<String, Object> formCriterion = cplxTableEcriture.getFormBean().getFormCriterion();
+		if(StringUtil.isNotEmpty(compteBanqueId)) {
+			req = req + "and ecritureBanque.opc_banque.id='[cptId]' ";
+			formCriterion.put("cptId", compteBanqueId);
+		}
+		if(StringUtil.isNotEmpty(dateDebut)) {
+			req = req + "and date_mouvement>='[dateDebut]' ";
+			formCriterion.put("dateDebut", dateDebut);
+		}
+		if(StringUtil.isNotEmpty(dateFin)) {
+			req = req + "and date_mouvement<='[dateFin]' ";
+			formCriterion.put("dateFin", dateFin);
+		}
+		if(StringUtil.isNotEmpty(source)){
+			req = req + "and source='[source]' ";
+			formCriterion.put("source", source);
+		}
+		if(StringUtil.isNotEmpty(compteClientId)){
+			req = req + "and ecritureBanque.opc_compte.id='[compteClientId]' ";
+			formCriterion.put("compteClientId", compteClientId);
+		}
+		if(StringUtil.isNotEmpty(compteFournId)){
+			req = req + "and ecritureBanque.opc_compte.id='[compteFournId]' ";
+			formCriterion.put("compteFournId", compteFournId);
+		}
+		if(StringUtil.isNotEmpty(compteId)){
+			req = req + "and ecritureBanque.opc_compte.id='[compteId]' ";
+			formCriterion.put("compteId", compteId);
+		}
+		
+		req = req + "order by ecritureBanque.date_mouvement desc, ecritureBanque.source, ecritureBanque.libelle";
+		
+		BigDecimal soldeActuelDate = compteBancaireService.getSoldeCompte(compteBanqueId, dateFin);
+		httpUtil.setRequestAttribute("soldeActuelDate", soldeActuelDate);
+		BigDecimal soldeActuel = compteBancaireService.getSoldeCompte(compteBanqueId);
+		httpUtil.setRequestAttribute("soldeActuel", soldeActuel);
+		
+		List<EcriturePersistant> listEcriture = (List<EcriturePersistant>) compteBancaireService.findByCriteria(cplxTableEcriture, req, false);
+		httpUtil.setRequestAttribute("list_ecriture", listEcriture);
+		
+		httpUtil.setDynamicUrl("/domaine/administration/compteEcriture_journal_list.jsp");		
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void getSoldeCompte(ActionUtil httpUtil){
+		Long compteBanqueId = httpUtil.getLongParameter("compte.id");
+		BigDecimal soldeActuel = compteBancaireService.getSoldeCompte(compteBanqueId);
+		//
+		httpUtil.writeResponse(BigDecimalUtil.formatNumber(soldeActuel));
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void editTrMvmCheque(ActionUtil httpUtil){
+		Long elementId = httpUtil.getLongParameter("art");
+		
+		PaiementPersistant paiementP = (PaiementPersistant) compteBancaireService.findById(PaiementPersistant.class, elementId);
+
+		if(paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.DEPENSE.toString())
+				|| paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.RECETTE.toString())){
+			new ChargeDiversAction().editTrMvm(httpUtil);
+		} else if(paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.ACHAT.toString()) 
+				|| paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.VENTE.toString())
+				|| paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.AVOIR.toString())
+				|| paiementP.getSource().equals(ContextAppli.TYPE_ECRITURE.RETOUR.toString())){
+			new MouvementAction().editTrMvm(httpUtil);
+		}
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void desactiver(ActionUtil httpUtil) {
+		compteBancaireService.activerDesactiverElement(httpUtil.getWorkIdLong());
+		work_find(httpUtil);
+	}
+	
+	public void work_post(ActionUtil httpUtil){
+		manageDataForm(httpUtil, "BANQUE");
+	}
+}

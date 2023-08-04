@@ -1,0 +1,308 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package appli.model.domaine.caisse.service.impl;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.caisse.bean.TicketCaisseBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.caisse.service.IJourneeService;
+import appli.model.domaine.caisse.service.ITicketCaisseService;
+import appli.model.domaine.fidelite.dao.IPortefeuille2Service;
+import appli.model.domaine.personnel.persistant.SocieteLivrPersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import appli.model.domaine.vente.persistant.TicketCaisseConfPersistant;
+import framework.component.complex.table.RequestTableBean;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+//@WorkModelClassValidator(validator=TicketCaisseValidator.class)
+public class TicketCaisseService extends GenericJpaService<TicketCaisseBean, Long> implements ITicketCaisseService{
+	@Inject
+	private IPortefeuille2Service portefeuille2Service;
+	@Inject
+	private IJourneeService journeeService;
+	
+	@Transactional
+	@Override
+	public void mergeConf(TicketCaisseConfPersistant attestConf){
+//		attestConf.setOpc_agence(ContextAppli.getAgenceBean());
+//		attestConf.setOpc_societe(ContextAppli.getSocieteBean());
+		//
+		getEntityManager().merge(attestConf);
+	}
+
+	@Transactional
+	@Override
+	public void deleteConf(Long confId){
+		getEntityManager().remove(findById(TicketCaisseConfPersistant.class, confId));
+	}
+	
+	//--------------------------------- SITUATION ------------------------------------
+	@Override
+	public Map getSituationClient(RequestTableBean cplxTable, Long clientId, Date dateDebut, Date dateFin){
+		Map mapData = new HashMap<>();
+		
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dateDebut);
+		if(journeeDebut == null){
+			return mapData;
+		}
+		
+		JourneePersistant journeeFin = journeeService.getJourneeOrLastByDate(dateFin);
+		if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		
+		mapData.put("dtStart", DateUtil.dateToString(journeeDebut.getDate_journee()));
+		mapData.put("dtEnd", DateUtil.dateToString(journeeFin.getDate_journee()));
+		
+		// Table pagination --------------------------------------------------
+		if(cplxTable != null){
+			String req = "from CaisseMouvementPersistant caisseMouvement where "
+			+ "caisseMouvement.opc_caisse_journee.opc_journee.id >='{journeeDebutId}' "
+			+ "and caisseMouvement.opc_caisse_journee.opc_journee.id <='{journeeFinId}' "
+			+ "and caisseMouvement.opc_client.id='{clientId}' "
+			+ "and (caisseMouvement.is_annule is null or caisseMouvement.is_annule=0) "
+			+ "order by caisseMouvement.id desc";
+			Map<String, Object> formCriterion = cplxTable.getFormBean().getFormCriterion();
+			formCriterion.put("journeeDebutId", journeeDebut.getId());
+			formCriterion.put("journeeFinId", journeeFin.getId());
+			formCriterion.put("clientId", clientId);
+			
+			List<CaisseMouvementPersistant> listMouvement = (List<CaisseMouvementPersistant>) findByCriteria(cplxTable, req, false);
+			mapData.put("data", listMouvement);
+		}
+		
+		// Total des recharges sur la date
+		String req = "select sum(mtt_total) from CaisseMouvementArticlePersistant caiMvm "
+				+ "where caiMvm.type_ligne=:typeLigne and "
+			    + "caiMvm.opc_mouvement_caisse.opc_client.id=:clientId "
+			    + " and (caiMvm.opc_mouvement_caisse.is_annule is null or caiMvm.opc_mouvement_caisse.is_annule=0) "
+				+ "and (caiMvm.is_annule is null or caiMvm.is_annule=0) "
+				+ "and caiMvm.opc_mouvement_caisse.opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and caiMvm.opc_mouvement_caisse.opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "order by caiMvm.opc_mouvement_caisse.id desc";
+		BigDecimal totalRechargePeriode = BigDecimalUtil.get(""+getSingleResult(getQuery(req)
+			.setParameter("clientId", clientId)
+			.setParameter("journeeDebutId", journeeDebut.getId())
+			.setParameter("journeeFinId", journeeFin.getId())
+			.setParameter("typeLigne", ContextAppli.TYPE_LIGNE_COMMANDE.RECHARGE_PF.toString())));
+		
+		List<CaisseMouvementPersistant> listMvm = getQuery("from CaisseMouvementPersistant where "
+				+ "opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "and opc_client.id=:clientId "
+				+ "and (is_annule is null or is_annule=0) ")
+				.setParameter("journeeDebutId", journeeDebut.getId())
+				.setParameter("journeeFinId", journeeFin.getId())
+				.setParameter("clientId", clientId)
+				.getResultList();
+		
+		BigDecimal mttTotal = null;
+		int nbrCmd = 0;
+		Map<String, BigDecimal> mapDetPaiement = new HashMap<>();
+		for(CaisseMouvementPersistant mvm : listMvm){
+			if(mvm.getList_article().size() == 1 && mvm.getList_article().get(0).getType_ligne().equals(ContextAppli.TYPE_LIGNE_COMMANDE.RECHARGE_PF.toString())){
+				continue;
+			}
+			String mode_paiement = "paie_"+mvm.getMode_paiement();
+			mapDetPaiement.put(mode_paiement, BigDecimalUtil.add(mapDetPaiement.get(mode_paiement), mvm.getMtt_commande_net()));
+			
+			mttTotal = BigDecimalUtil.add(mttTotal, mvm.getMtt_commande_net());
+			nbrCmd++;
+		}
+		// [Solde recharge, solde mouvement]
+		BigDecimal[] dataDetail = portefeuille2Service.getSoldePortefeuilleDetail(clientId, "CLI");
+		BigDecimal totalRecharge = dataDetail[0];
+		BigDecimal totalMvmPortefeuille = dataDetail[1];
+		BigDecimal nbrAllCmd = dataDetail[2];
+		
+		mapData.putAll(mapDetPaiement);
+		mapData.put("totalRechargePeriode", totalRechargePeriode);
+		mapData.put("totalRecharge", totalRecharge);
+		mapData.put("totalMvmPortefeuille", totalMvmPortefeuille);
+		mapData.put("solde", BigDecimalUtil.substract(totalRecharge, totalMvmPortefeuille));
+		mapData.put("nbrAllCmd", nbrAllCmd);
+		mapData.put("totalCmd", mttTotal);
+		mapData.put("nbrCmd", nbrCmd);
+		
+		return mapData;
+	}
+	
+	@Override
+	public Map getSituationSocieteLivr(RequestTableBean cplxTable, Long societeLivrId, Date dateDebut, Date dateFin){
+		Map mapData = new HashMap<>();
+		
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dateDebut);
+		if(journeeDebut == null){
+			return mapData;
+		}
+		
+		JourneePersistant journeeFin = journeeService.getJourneeOrLastByDate(dateFin);
+		if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		
+		mapData.put("dtStart", DateUtil.dateToString(journeeDebut.getDate_journee()));
+		mapData.put("dtEnd", DateUtil.dateToString(journeeFin.getDate_journee()));
+		
+		// Table pagination --------------------------------------------------
+		if(cplxTable != null){
+			String req = "from CaisseMouvementPersistant caisseMouvement where "
+			+ "caisseMouvement.opc_caisse_journee.opc_journee.id >='{journeeDebutId}' "
+			+ "and caisseMouvement.opc_caisse_journee.opc_journee.id <='{journeeFinId}' "
+			+ "and caisseMouvement.opc_societe_livr.id='{societeLivrId}' "
+			+ "and (caisseMouvement.is_annule is null or caisseMouvement.is_annule=0) "
+			+ "order by caisseMouvement.id desc";
+			Map<String, Object> formCriterion = cplxTable.getFormBean().getFormCriterion();
+			formCriterion.put("journeeDebutId", journeeDebut.getId());
+			formCriterion.put("journeeFinId", journeeFin.getId());
+			formCriterion.put("societeLivrId", societeLivrId);
+			
+			List<CaisseMouvementPersistant> listMouvement = (List<CaisseMouvementPersistant>) findByCriteria(cplxTable, req, false);
+			mapData.put("data", listMouvement);
+			
+			return mapData;
+		}
+		//--------------------------------------------------------------------
+				
+		Object[] mttTotal = (Object[]) getSingleResult(getQuery("select sum(mtt_commande_net), sum(mtt_livraison_ttl) "
+				+ "from CaisseMouvementPersistant where "
+				+ "opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "and opc_societe_livr.id=:societeLivrId "
+				+ "and (is_annule is null or is_annule=0) ")
+				.setParameter("journeeDebutId", journeeDebut.getId())
+				.setParameter("journeeFinId", journeeFin.getId())
+				.setParameter("societeLivrId", societeLivrId)
+				);
+		
+		List<Object[]> mttTotalPaiement = (List<Object[]>) getQuery("select mode_paiement, sum(mtt_commande_net), sum(mtt_livraison_ttl) "
+				+ "from CaisseMouvementPersistant where "
+				+ "opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "and opc_societe_livr.id=:societeLivrId "
+				+ "and (is_annule is null or is_annule=0) "
+				+ "group by mode_paiement")
+				.setParameter("journeeDebutId", journeeDebut.getId())
+				.setParameter("journeeFinId", journeeFin.getId())
+				.setParameter("societeLivrId", societeLivrId)
+				.getResultList();
+		
+		SocieteLivrPersistant societeLivrP = findById(SocieteLivrPersistant.class, societeLivrId);
+//		BigDecimal tauxMarge = societeLivrP.getTaux_marge();
+		
+		for (Object[] info : mttTotalPaiement) {
+			mapData.put("paie_"+info[0], info);
+		}
+		
+		mapData.put("totalCmdNet", mttTotal[0]);
+		mapData.put("totalCmdFraisLivr", mttTotal[1]);
+		
+		return mapData;
+	}
+	@Override
+	public Map getSituationLivreur(RequestTableBean cplxTable, Long livreurId, Date dateDebut, Date dateFin){
+		Map mapData = new HashMap<>();
+
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dateDebut);
+		if(journeeDebut == null){
+			return mapData;
+		}
+		
+		JourneePersistant journeeFin = journeeService.getJourneeOrLastByDate(dateFin);
+		if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		
+		mapData.put("dtStart", DateUtil.dateToString(journeeDebut.getDate_journee()));
+		mapData.put("dtEnd", DateUtil.dateToString(journeeFin.getDate_journee()));
+		
+		// Table pagination --------------------------------------------------
+		if(cplxTable != null){
+			String req = "from CaisseMouvementPersistant caisseMouvement where "
+			+ "caisseMouvement.opc_caisse_journee.opc_journee.id >='{journeeDebutId}' "
+			+ "and caisseMouvement.opc_caisse_journee.opc_journee.id <='{journeeFinId}' "
+			+ "and opc_livreurU.id=:livreurId "
+			+ "and type_commande='L' "
+			+ "and (caisseMouvement.is_annule is null or caisseMouvement.is_annule=0) "
+			+ "order by caisseMouvement.id desc";
+			Map<String, Object> formCriterion = cplxTable.getFormBean().getFormCriterion();
+			formCriterion.put("journeeDebutId", journeeDebut.getId());
+			formCriterion.put("journeeFinId", journeeFin.getId());
+			formCriterion.put("livreurId", livreurId);
+			
+			List<CaisseMouvementPersistant> listMouvement = (List<CaisseMouvementPersistant>) findByCriteria(cplxTable, req, false);
+			mapData.put("data", listMouvement);
+			
+			return mapData;
+		}
+		//--------------------------------------------------------------------
+		
+		Object[] mttTotal = (Object[]) getSingleResult(getQuery("select "
+				+ "sum(mtt_commande_net), "
+				+ "sum(mtt_livraison_ttl), "
+				+ "sum(mtt_livraison_livr) "
+				
+				+ "from CaisseMouvementPersistant where "
+				+ "opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "and opc_livreurU.id=:livreurId "
+				+ "and type_commande='L' "
+				+ "and (is_annule is null or is_annule=0) ")
+				//+ "group by mode_paiement")
+				.setParameter("journeeDebutId", journeeDebut.getId())
+				.setParameter("journeeFinId", journeeFin.getId())
+				.setParameter("livreurId", livreurId)
+				);
+		
+		List<Object[]> mttTotalPaiement = (List<Object[]>) getQuery("select "
+				+ "mode_paiement, "
+				+ "sum(mtt_commande_net), "
+				+ "sum(mtt_livraison_ttl), "
+				+ "sum(mtt_livraison_livr), "
+				+ "sum(mtt_livraison_ttl-mtt_livraison_livr) "
+				
+				+ "from CaisseMouvementPersistant where "
+				+ "opc_caisse_journee.opc_journee.id >=:journeeDebutId "
+				+ "and opc_caisse_journee.opc_journee.id <=:journeeFinId "
+				+ "and type_commande='L' "
+				+ "and opc_livreurU.id=:livreurId "
+				+ "and (is_annule is null or is_annule=0) "
+				+ "group by mode_paiement")
+				.setParameter("journeeDebutId", journeeDebut.getId())
+				.setParameter("journeeFinId", journeeFin.getId())
+				.setParameter("livreurId", livreurId)
+				.getResultList();
+		
+		for (Object[] info : mttTotalPaiement) {
+			mapData.put("paie_"+info[0], info);
+		}
+		
+		if(mttTotal != null) {
+			mapData.put("totalCmdNet", BigDecimalUtil.get(""+mttTotal[0]));
+			mapData.put("totalCmdFraisTtl", BigDecimalUtil.get(""+mttTotal[1]));
+			mapData.put("totalCmdFraisLivr", BigDecimalUtil.get(""+mttTotal[2]));
+			mapData.put("totalCmdFraisSoc", (BigDecimalUtil.substract(
+					BigDecimalUtil.get(""+mttTotal[1]), BigDecimalUtil.get(""+mttTotal[2]))));
+		}
+		
+		return mapData;
+	}
+}
+

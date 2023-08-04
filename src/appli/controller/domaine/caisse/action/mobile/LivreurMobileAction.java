@@ -1,0 +1,331 @@
+package appli.controller.domaine.caisse.action.mobile;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import org.locationtech.jts.geom.Coordinate;
+
+import com.google.gson.Gson;
+
+import appli.controller.domaine.administration.action.LoginAction;
+import appli.controller.domaine.administration.bean.JourneeBean;
+import appli.controller.domaine.administration.bean.UserBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.controller.domaine.util_erp.ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM;
+import appli.controller.domaine.util_erp.ContextAppli.STATUT_LIVREUR_COMMANDE;
+import appli.controller.domaine.util_erp.ContextAppli.TYPE_NOTIFICATION;
+import appli.model.domaine.administration.persistant.UserPersistant;
+import appli.model.domaine.administration.service.IEtablissementService;
+import appli.model.domaine.administration.service.IUserService;
+import appli.model.domaine.caisse.service.ICaisseMouvementService;
+import appli.model.domaine.caisse.service.impl.NotificationQueuService;
+import appli.model.domaine.personnel.persistant.ClientPersistant;
+import appli.model.domaine.personnel.persistant.EmployePersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.ControllerUtil;
+import framework.controller.FileUtilController;
+import framework.controller.annotation.WorkController;
+import framework.model.beanContext.AbonnementBean;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.constante.ProjectConstante;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.BooleanUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.EncryptionEtsUtil;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.ServiceUtil;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+
+@WorkController(nameSpace="caisse", bean=JourneeBean.class, jspRootPath="/domaine/caisse/mobile-serveur")
+public class LivreurMobileAction extends ActionBase {
+	@Inject
+	private ICaisseMouvementService caisseService;
+	@Inject
+	private IUserService userService;
+	@Inject
+	private IEtablissementService etablissementService;
+	
+	public void work_init(ActionUtil httpUtil){
+
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void getDetailCmd(ActionUtil httpUtil) {
+		Long cmdId = null;
+		if(httpUtil.getParameter("cmd") != null) {
+			cmdId = httpUtil.getLongParameter("cmd");
+		} else {
+			cmdId = httpUtil.getWorkIdLong();
+		}
+		CaisseMouvementPersistant cmdP = caisseService.findById(CaisseMouvementPersistant.class, cmdId);
+		ClientPersistant clientP = cmdP.getOpc_client();
+		UserPersistant livreurP = cmdP.getOpc_livreurU();
+		
+		// Infos distances
+		
+		if(clientP != null && livreurP != null) {
+			if(clientP.getPosition_lng() != null) {
+				Coordinate positionClient = new Coordinate(clientP.getPosition_lng().doubleValue(), clientP.getPosition_lat().doubleValue());
+				Coordinate positionLivreur = new Coordinate(livreurP.getPosition_lng().doubleValue(), livreurP.getPosition_lat().doubleValue());
+			
+				Map mapInfos = getMapInfos(positionLivreur, positionClient);
+			
+				for(Object key : mapInfos.keySet()) {
+					httpUtil.setRequestAttribute(""+key, mapInfos.get(key));
+				}
+			}
+		}
+		httpUtil.setRequestAttribute("caisseMouvement", cmdP);
+		httpUtil.setRequestAttribute("tp", httpUtil.getParameter("tp"));
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/mobile-livreur/commande-detail.jsp");
+		return;
+	}
+	
+	public static Map getMapInfos(Coordinate coordDepart, Coordinate coordRef) { 
+		BigDecimal latitudeDepart = BigDecimal.valueOf(coordDepart.getY());
+		BigDecimal longitudeDepart = BigDecimal.valueOf(coordDepart.getX());
+		BigDecimal longitudeRef = BigDecimal.valueOf(coordRef.getX());
+		BigDecimal latitudeRef = BigDecimal.valueOf(coordRef.getY());
+		Map mapInfos = new HashMap<>();
+		
+		String url = StrimUtil.getGlobalConfigPropertie("api.google.api.key")+"?origin=" + latitudeDepart
+			+ "," +  longitudeDepart + "&destination=" + latitudeRef + ","
+			+ longitudeRef + "&key="+StrimUtil.getGlobalConfigPropertie("api.google.key");
+		
+		try {
+			String retour = FileUtilController.callURL(url);// Appel API GOOGLE
+			
+			Map map = new Gson().fromJson(retour, Map.class);
+			List array = (List) map.get("routes");
+			
+			if(array != null && array.size() == 0) {
+				return null;
+			} else {
+				Map map2 = (Map) array.get(0);
+				List array2 = (List) map2.get("legs");
+				
+				Map map3 = (Map) array2.get(0);
+				Map mapDist = (Map) map3.get("distance");
+				
+				mapInfos.put("distance", BigDecimalUtil.formatNumber(BigDecimalUtil.divide(BigDecimalUtil.get("" + mapDist.get("value")), BigDecimalUtil.get(1000))));
+				
+				// temps
+				Map mapDuration = (Map) map3.get("duration");
+				mapInfos.put("duration", BigDecimalUtil.formatNumber(BigDecimalUtil.divide(BigDecimalUtil.get("" + mapDuration.get("value")), BigDecimalUtil.get(60)), 0));
+				
+				return mapInfos;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void loadCommandes(ActionUtil httpUtil) {
+		Long cmdId = httpUtil.getLongParameter("cmd");
+		String type = httpUtil.getParameter("tp");
+		int page = httpUtil.getIntParameter("pg");
+		
+		if(type.startsWith("LOAD_")) {
+			type = type.substring(type.length()-1);
+			httpUtil.setRequestAttribute("tp", type);
+			httpUtil.setDynamicUrl("/domaine/caisse/mobile-livreur/commande-list.jsp");
+			return;
+		}
+		
+		//A : Cmd en attente, H : Cmd historique
+		UserPersistant user = ContextAppli.getUserBean();
+		
+		List<CaisseMouvementPersistant> listCommandes = null;
+		if(cmdId == null) {
+			listCommandes = caisseService.getListCommandes(user.getId(), type,page);
+		} else {
+			listCommandes = new ArrayList<>();
+			listCommandes.add(caisseService.findById(CaisseMouvementPersistant.class, cmdId));			
+		}
+		
+		String json = ControllerUtil.getJSonDataAnnotStartegy(listCommandes);
+		httpUtil.writeResponse(json);
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void changeStatutCommande(ActionUtil httpUtil) {
+		
+		Long cmdId = httpUtil.getLongParameter("cmd");
+		String statut = httpUtil.getParameter("statut");
+		String message = "";
+		String typeNotif = "";
+		
+		CaisseMouvementPersistant commande = caisseService.findById(CaisseMouvementPersistant.class, cmdId);
+		commande.setStatut_livreur(statut);
+		
+		if(STATUT_LIVREUR_COMMANDE.EN_ROUTE.toString().equals(statut)) {
+			message = "Le livreur est en route";
+			typeNotif = TYPE_NOTIFICATION.ETS_CLIENT_CMD_ENROUTE.toString();
+		} else if(STATUT_LIVREUR_COMMANDE.LIVRE.toString().equals(statut)) {
+			commande.setLast_statut(STATUT_CAISSE_MOUVEMENT_ENUM.LIVRE.toString());
+			message = "Le livreur est arrivé";
+			typeNotif = TYPE_NOTIFICATION.ETS_CLIENT_CMD_LIVRE.toString();
+		}
+		
+		Map<String, String> mapData = new HashMap<>();
+		mapData.put("title", "Statut commande");
+		mapData.put("message", message);
+		mapData.put("type", typeNotif);
+		mapData.put("client", commande.getOpc_client()!=null ? commande.getOpc_client().getId().toString() : "");
+		
+		NotificationQueuService notifService = ServiceUtil.getBusinessBean(NotificationQueuService.class);
+		String login = commande.getOpc_client().getLogin();
+		login = (StringUtil.isEmpty(login) ? commande.getOpc_client().getPortable() : login);
+		
+		if(StringUtil.isNotEmpty(login)) {
+			UserPersistant userFromClient = userService.getUserByLogin(login);
+			notifService.addNotification(mapData, userFromClient, commande, null);
+		}
+		caisseService.mergeEntity(commande);
+
+		httpUtil.writeResponse("OK");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void loadDashBoard(ActionUtil httpUtil) {
+		UserPersistant user = (UserPersistant) MessageService.getGlobalMap().get(ProjectConstante.SESSION_GLOBAL_USER);
+		EmployePersistant livreur = user.getOpc_employe();
+		Long livreurId = (livreur != null ? livreur.getId() : null);
+		
+		Date dtDebut = null, dtFin = null;
+		// Date début
+		Calendar cal = DateUtil.getCalendar(new Date());
+		int mt = cal.get(Calendar.MONTH)+1;
+		String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+		
+		if(StringUtil.isEmpty(httpUtil.getParameter("curr_dtDebut"))){
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(httpUtil.getParameter("curr_dtDebut"));
+		}
+		
+		// Date fin
+		if(StringUtil.isEmpty(httpUtil.getParameter("curr_dtFin"))){
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(httpUtil.getParameter("curr_dtFin"));
+		}
+		
+		httpUtil.setRequestAttribute("curr_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_dtFin", dtFin);
+		
+		Map<String, Object> mapData = caisseService.getDataSynthese(livreurId, dtDebut, dtFin);
+		httpUtil.setRequestAttribute("mapData", mapData);
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/mobile-livreur/synthese_livreur.jsp");
+		
+		return;
+	}
+	
+	public void login(ActionUtil httpUtil) throws Exception{
+		EncryptionEtsUtil encryptionUtil = new EncryptionEtsUtil(EncryptionEtsUtil.getDecrypKey());
+		
+		String login = httpUtil.getParameter("log.login");
+		String password = httpUtil.getParameter("log.password");
+		
+		if(StringUtil.isEmpty(login)) {
+			MessageService.addFieldMessage("log.login", "Le login est obligatoire");
+			return;
+		} else if(StringUtil.isEmpty(password)) {
+			MessageService.addFieldMessage("log.password", "Le mot de passe est obligatoire");
+			return;
+		}
+		
+		login = login.replaceAll("-", "");
+		UserBean userBean = userService.getUserByLoginAndPw(login, encryptionUtil.encrypt(password)); 
+		if(userBean == null){
+			MessageService.addGrowlMessage("", "Le login ou le mot de passse est erroné");	
+			return;
+		}
+		if(!userBean.isInProfile("LIVREUR")){
+			MessageService.addGrowlMessage("", "Votre profile ne permet d'accèder à cet espace.");	
+			return;
+		}
+		
+		// Si le compte est désactivé
+		if(BooleanUtil.isTrue(userBean.getIs_desactive())){
+			MessageService.addGrowlMessage("", "Votre compte est désactivé.");
+			return;
+		}
+		
+		Long etsId = null;
+		if(userBean.getOpc_etablissement() != null) {
+			etsId = userBean.getOpc_etablissement().getId();
+		} else if(ContextAppli.getEtablissementBean() != null) {
+			etsId = ContextAppli.getEtablissementBean().getId();
+		}
+		
+		if(etsId == null) {
+			MessageService.addGrowlMessage("", "Aucun établissement trouvé.");
+			return;
+		}
+		
+		EtablissementPersistant etsP = etablissementService.findById(EtablissementPersistant.class, etsId);
+		
+		if(BooleanUtil.isTrue(etsP.getIs_disable())) {
+			MessageService.addGrowlMessage("Application désactivée", "L'application est désactivée suite depuis le Cloud.");
+			MessageService.getGlobalMap().remove(ProjectConstante.SESSION_GLOBAL_USER);
+			return;
+		}
+		
+		LoginAction.loadAbonnement();
+		AbonnementBean abnBean = (AbonnementBean) MessageService.getGlobalMap().get("ABONNEMENT_BEAN");
+		if(!BooleanUtil.isTrue(abnBean.isOptPlusCmdVitrine())) {
+			MessageService.addGrowlMessage("", "Votre établissement n'est abonné à ce service");
+			return;
+		}
+		
+		MessageService.getGlobalMap().put(ProjectConstante.SESSION_GLOBAL_USER, userBean);
+		MessageService.getGlobalMap().put("GLOBAL_ETABLISSEMENT", ReflectUtil.cloneBean(etsP));
+		MessageService.getGlobalMap().put("CURRENT_JOURNEE", userService.getLastJourne());
+
+		String deviceToken = (String)httpUtil.getUserAttribute("DEVICE_TOKEN");
+		if(StringUtil.isNotEmpty(deviceToken)) {
+			UserPersistant userP = userService.findById(UserPersistant.class, userBean.getId());
+			userP.setDevice_token(deviceToken);
+			userService.mergeEntity(userP);
+		}
+	
+		httpUtil.writeResponse("REDIRECT:");
+    }
+	
+	public void logout(ActionUtil httpUtil){
+		HttpServletRequest request = httpUtil.getRequest();
+		HttpSession session = request.getSession(false);
+		
+		// If session exists, destroy it
+		if(session != null){
+			session.invalidate();
+		}
+		httpUtil.writeResponse("REDIRECT:");
+	}
+}

@@ -1,0 +1,56 @@
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp" %>
+
+<%
+boolean isConfirmReduceCmd = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SECURE_REDUCTION_CMD"));
+%>
+<style>
+#generic_modal_body{
+	width: 730px;
+	margin-left: -10%;
+}
+</style>
+
+<std:form name="search-form">
+	<div class="widget-header bordered-bottom bordered-blue">
+		<span class="widget-caption">Offres et r&eacute;ductions</span>
+		<button type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal" style="margin-top: 2px;margin-right: 5px;">
+			<i class="fa fa-times"></i> Fermer
+		</button>
+	</div>
+	<div class="widget-body">
+		<cplx:table name="list_offre" transitionType="simple" width="100%" title="Liste des offres" initAction="caisse-web.caisseWeb.initOffre" paginate="false" exportable="false" filtrable="false" checkable="false">
+			<cplx:header>
+				<cplx:th type="empty" width="50" />
+				<cplx:th type="string" valueKey="offre.libelle" field="offre.libelle" />
+				<cplx:th type="decimal" valueKey="offre.taux_reduction" field="offre.taux_reduction" width="120" />
+			</cplx:header>
+			<cplx:body>
+				<c:forEach items="${list_offre }" var="offre">
+					<cplx:tr workId="${offre.id }">
+						<cplx:td>
+							<%if(isConfirmReduceCmd){ %>
+								<std:link classStyle="btn btn-default" style="color:blue;" action="caisse-web.caisseWeb.loadConfirmAnnule" targetDiv="generic_modal_body" icon="fa fa-eye" params="tp=reduce" workId="${offre.id}" tooltip="Réduction commande" /> 
+							<%} else{ %>
+								<std:link classStyle="btn btn-default" style="color:blue;" workId="${offre.id}" action="caisse-web.caisseWeb.selectOffre" targetDiv="left-div" icon="fa fa-eye" tooltip="S&eacute;lectionner" />
+							<%} %>
+						</cplx:td>
+						<cplx:td value="${offre.libelle}"></cplx:td>
+						<cplx:td align="right" value="${offre.taux_reduction}"></cplx:td>
+					</cplx:tr>
+				</c:forEach>
+			</cplx:body>
+		</cplx:table>
+	</div>	
+ </std:form>	
+

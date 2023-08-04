@@ -1,0 +1,279 @@
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.STATUT_JOURNEE"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%> 
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<style>
+#mnu_drop a{	
+	text-align: left;
+    line-height: 38px;
+    font-size: 15px;
+    background-color: #f6f6f6;
+}
+#mnu_drop li{
+	margin-bottom: 4px;
+}
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+a.blink {
+  animation: blink 1s 20 steps(1);
+}
+</style>
+
+<script type="text/javascript">
+$(document).ready(function (){
+	<%if(ControllerUtil.getUserAttribute("CHECK_DIFF_DAYS", request) != null){%>
+		setTimeout(function(){
+			$("a.blink").attr("class", "dropdown-toggle");
+		}, 10000);
+	<%} %>
+});
+</script>
+			 
+<%
+	String context = StrimUtil.getGlobalConfigPropertie("context.soft");
+	boolean isRestau = "restau".equals(context);
+	boolean isCaisseVerouille = ControllerUtil.getMenuAttribute("IS_CAISSE_VERROUILLE", request) != null;
+	boolean isCaisseNotFermee = (ContextAppliCaisse.getJourneeCaisseBean() != null && ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse().equals("O"));
+	boolean isJourneeCaisseOuverte = !isCaisseVerouille && isCaisseNotFermee;	
+	boolean isJourneeOuverte = (ContextAppliCaisse.getJourneeBean() != null && ContextAppliCaisse.getJourneeBean().getStatut_journee().equals("O"));
+	boolean isShowHisto = StringUtil.isTrueOrNull(""+ControllerUtil.getUserAttribute("RIGHT_HISTOCAIS", request));
+	
+	if(ContextAppliCaisse.getCaisseBean() == null){%>
+		<script type="text/javascript">
+			var url = window.location.toString().substring(0, window.location.toString().lastIndexOf("/"));
+			window.location = url+"?lgo=1";
+		</script>
+	<%}%>
+
+<std:linkPopup actionGroup="X" id="lock_screen" action="caisse-web.caisseWeb.initQuitterLockMode" style="display: none;" /> 
+	
+<!-- Page Breadcrumb -->
+<div class="page-header position-relative" style="height: 51px;left: 0px;top: -4px;<%=StringUtil.isEmpty(CaisseWebBaseAction.GET_STYLE_CONF("PANEL_ENETETE", null))?"background-image: linear-gradient(#fbfbfb, #ddd)":"background:"+ContextGloabalAppli.getGlobalConfig("PANEL_ENETETE")%>">
+	<div class="header-title" style="padding-top: 4px;margin-left: 120px;">
+	     <std:linkPopup classStyle="btn btn-default btn-lg shiny btn-top-cai" style="width: 62px;color:#fb6e52;text-align:left;" action="caisse-web.caisseWeb.loadCalc" icon="fa fa-calculator" tooltip="Calculatrice" />
+	       
+	    <% if(isJourneeOuverte){ %>	
+       	  |
+       	  <% if(isJourneeCaisseOuverte){ %>	
+	           	 <div class="btn-group">
+	                <%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_CLOSE_SHIFT"))){ %>
+	                <a style="color:green;" class="btn btn-default btn-lg shiny btn-top-cai" targetdiv="generic_modal_body" data-backdrop="static" data-keyboard="false" data-toggle="modal" data-target="#generic_modal" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initShift")%>" title="Shift" href="javascript:void(0);">
+			          	<i class="fa fa-pie-chart"></i>
+			          	<span class="span-sub-cai">SHIFT</span>
+			        </a>
+			        <%} %>
+	                <a class="btn btn-default dropdown-toggle btn-lg shiny btn-top-cai" style="padding-top: 17px;" data-toggle="dropdown" href="javascript:void(0);">
+	                	<i class="fa fa-angle-down"></i>
+	                </a>
+	                <ul class="dropdown-menu" id="mnu_drop">
+	                    <%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_CAI"))){ %> 
+		                 	<li>
+		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RCJ" icon="fa-print" value="Remise à zéro" tooltip="Imprimer la RAZ" />
+							</li>    
+						<%}%>
+						<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_CLIENT"))
+											|| StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_SOC_LIVR"))
+											|| StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_LIVREUR"))
+											){ %> 
+							<li>
+                          	<std:linkPopup action="caisse-web.caisseWeb.init_situation" value="Situations" icon="fa fa-fw fa-plus-square-o" tooltip="Situations" />
+ 						  </li> 
+						<%}%>
+<%-- 		                <%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_EMPL"))){ %>  --%>
+<!-- 		                 	<li> -->
+<%-- 		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RE" icon="fa-print" value="RAZ employé" tooltip="Imprimer la RAZ employé" /> --%>
+<!-- 							</li>     -->
+<%-- 						<%}%> --%>
+<%-- 						<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_ART"))){ %>  --%>
+<!-- 		                 	<li> -->
+<%-- 		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RA" icon="fa-print" value="RAZ articles" tooltip="Imprimer la RAZ articles" /> --%>
+<!-- 							</li>     -->
+<%-- 						<%}%> --%>
+<%-- 						<%if(isRestau && StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_BOISS"))){ %>  --%>
+<!-- 		                 	<li> -->
+<%-- 		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RB" icon="fa-print" value="RAZ boisson" tooltip="Imprimer la RAZ boisson" /> --%>
+<!-- 							</li>     -->
+<%-- 						<%}%> --%>
+<%-- 						<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_MODE_PAIE"))){ %>  --%>
+<!-- 		                 	<li> -->
+<%-- 		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RMP" icon="fa-print" value="RAZ mode paiement" tooltip="Imprimer la RAZ mode de paiments" /> --%>
+<!-- 							</li>     -->
+<%-- 						<%}%> --%>
+<%-- 						<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_IMPRAZ_LIVR"))){ %>  --%>
+<!-- 		                 	<li> -->
+<%-- 		                 		<std:linkPopup actionGroup="C" action="caisse.razPrint.init_raz_caisse" params="mnu=RSL" icon="fa-print" value="RAZ client société" tooltip="Imprimer la RAZ société de livraison" /> --%>
+<!-- 							</li>     -->
+<%-- 						<%}%> --%>
+	                   </ul>
+	               </div>           
+             <%} %>                 
+                	<% if(isJourneeCaisseOuverte){ %>	
+                		<%if(isShowHisto){ %>
+                        <a class="btn btn-default btn-lg shiny btn-top-cai" targetDiv="right-div" style="color:black;text-align:left;" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initHistorique")%>" params="isrp=0" href="javascript:void(0);" title="Historique des commandes">
+                        	<i class="fa fa-history"></i>
+                        	<span class="span-sub-cai">HISTORIQUE</span>
+                        </a>
+                        <%} %>
+                        <a style="width: 90px;color:blue;text-align:left;" class="btn btn-default btn-lg shiny btn-top-cai" targetDiv="right-div" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initHistorique")%>" params="isrp=1" title="Reprise d'une commande depuis l'historique" href="javascript:void(0);">
+                        	<i class="fa fa-reply-all"></i> <i class="fa fa-server"></i>
+                        	<span class="span-sub-cai">REPRISE CMD</span>
+                        </a>
+                  		<% if(isRestau && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CAISSE_TABLE"))){ %>    
+					        <std:linkPopup style="width: 90px;color:blue;text-align:left;" classStyle="btn btn-default btn-lg shiny btn-top-cai" action="caisse-web.caisseWeb.initPlan" params="isrp=1" icon="fa fa-reply-all" tooltip="Reprise d'une commande depuis les tables">
+					        	<i class="fa fa-th"></i>
+			                    <span class="span-sub-cai">REPRISE TABLE</span>
+					        </std:linkPopup>
+						 <% }%>
+                    	|	 
+                        <div class="btn-group">
+                           <std:link id="home_lnk" style="width: 62px;color:#4CAF50;" classStyle="btn btn-succes btn-lg shiny btn-top-cai" action="caisse-web.caisseWeb.init_home" targetDiv="right-div" icon="fa-3x fa fa-home" tooltip="Accueil" />
+                           <a class="btn btn-default dropdown-toggle btn-lg shiny btn-top-cai" style="padding-top: 17px;" data-toggle="dropdown" href="javascript:void(0);">
+                           	<i class="fa fa-angle-down"></i>
+                           </a>
+                           <ul class="dropdown-menu" id="mnu_drop">
+                               <%if(isRestau){ %>
+	                               <li>
+	                                   <std:link action="caisse-web.presentoire.loadCommande" params="is_ref=1&tp=pre" targetDiv="right-div">
+	                                   		<i class="fa fa-laptop" style="color: blue;"></i> Ecran pr&eacute;sentoire
+	                                   	</std:link>
+	                               </li>
+                               <%}%>
+		                           <%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_ACHAT_ART_LIBRE"))
+		                        		   || StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_VENTE_ART_LIBRE"))){ %>
+			                            <li>
+			                            	<std:linkPopup action="caisse-web.caisseWeb.init_add_depense" tooltip="Activer l'afficheur">
+												<i class="fa fa-fw fa-money"></i> Vente/achat libre
+											</std:linkPopup>
+			                            </li>
+		                            <%} %>
+		                            <li>
+		                            	<std:linkPopup action="caisse-web.caisseWeb.init_add_retour" tooltip="Déclarer un retour">
+											<i class="fa fa-fw fa-mail-reply-all"></i> Déclarer un retour
+										</std:linkPopup>
+		                            </li>
+		                            
+		                            <li>
+		                          		<std:link action="caisse-web.calendrier.work_find" tooltip="Afficher le calendrier" targetDiv="right-div">
+											<i class="fa fa-calendar"></i> Calendrier 
+										</std:link>
+		 						  	</li> 
+		                            <%if(!isRestau && StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_ADD_ART"))){ %> 
+			                          <li>
+			                          	<std:linkPopup action="caisse-web.caisseWeb.init_add_article" tooltip="Ajouter un article">
+											<i class="fa fa-fw fa-plus-square-o"></i> Ajouter un article 
+										</std:linkPopup>
+			 						  </li>    
+									<%}%>
+									<li>
+										<std:linkPopup action="caisse-web.caisseWeb.init_conf_imprimantes" tooltip="Configurer les imprimantes de la caisse">
+											<i class="fa fa-fw fa-sliders"></i> Configurer imprimante(s) 
+										</std:linkPopup>
+		                            </li>
+									<li>
+		                          		<std:linkPopup action="caisse-web.caisseWeb.init_opts" tooltip="Ajouter un article">
+											<i class="fa fa-gears"></i> Options 
+										</std:linkPopup>
+		 						  	</li> 
+                           </ul>
+                       </div>
+                    <%} %>   
+       			<%} else{
+			       		//if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_CLOJRN", request))){
+			       		%>
+<%-- 							<%if(isJourneeOuverte){ %> --%>
+<%-- 								<std:link action="" id="clore_lnk" params="isReclos=1" actionGroup="C" classStyle="btn btn-warning btn-lg shiny btn-top-cai" icon="fa-calendar-o" tooltip="Clore la journ&eacute;e" /> --%>
+<%-- 							<%} else{ %> --%>
+<%-- 								<std:linkPopup actionGroup="C" classStyle="btn btn-success btn-lg shiny btn-top-cai" action="caisse.journee.work_init_create" icon="fa-calendar-o" tooltip="Ouvrir la joun&eacute;e" /> --%>
+<%-- 							<%} %> --%>
+<%--                     	<%} %> --%>
+                 <%} %>
+                 <span class="span-jour-title" style="top: 8px;">
+        			<i class="fa fa-calendar"></i>
+        			<%if(ContextAppliCaisse.getJourneeBean() != null){ %>
+       					<%=DateUtil.dateToString(ContextAppliCaisse.getJourneeBean().getDate_journee())%>
+       					[<span style="color:blue;"><%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeBean().getStatut_journee())%></span>]
+       				<%} else{%>
+       					<span style="red;">JOURNÉE FERMÉE</span>
+       				<%} %>
+       			</span>
+       			<span class="span-jour-title" style="bottom: -8px;">
+        			<i class="fa fa fa-fax"></i>
+        			<%if(ContextAppliCaisse.getJourneeCaisseBean() != null){ %>
+       		 			<%=ContextAppliCaisse.getCaisseBean().getReference()%> 
+       		 			[<span style="color:blue;"><%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse())%></span>]
+       				<%} else{%>
+       					<%=ContextAppliCaisse.getCaisseBean().getReference()%> [<span style="color:red;">FERMÉE</span>]
+       				<%}%>	 
+        		|
+       			</span>
+  		</div>
+  
+  			
+  <!--Header Buttons-->
+  <div class="header-buttons">
+  		
+  		<%if(ControllerUtil.getUserAttribute("CHECK_DIFF_DAYS", request) != null){ %>
+  		<a onclick="showPostAlert('', 'Abonnement expiré depuis <%=ControllerUtil.getUserAttribute("CHECK_DIFF_DAYS", request)%> jours', 'ERROR');" style="position: absolute;right: 316px;padding-left: 0px;height: 50px;padding-top: 14px;" class="blink" title="Expiration abonnement" href="javascript:">
+            <i class="icon fa fa-warning" style="color: orange;font-size: 34px;"></i>
+        </a>
+  		<%} %>
+  		
+  		<div class="widget-buttons buttons-bordered" style="float: left;">
+     		<label style="margin-top: 10px;">
+              	<input class="checkbox-slider toggle colored-blue" type="checkbox" id="keyboard-activator" style="display: none;">
+              	<span class="text"></span>
+	         </label>
+	         <span style="bottom: -20px;padding-left: 14px;" class="span-sub-cai">CLAVIER</span>
+     	</div>
+     	<div style="float: left;">
+	   		<select id="zoom_slct" style="margin-top: 3px;background-color: transparent;height: 48px;">
+	   			<option value="1">100%</option>
+	   			<option value="0.9">90%</option>
+	   			<option value="0.85">85%</option>
+	   			<option value="0.8">80%</option>
+	   			<option value="0.75">75%</option>
+	   			<option value="0.7">70%</option>
+	   			<option value="0.6">60%</option>
+	   			<option value="0.5">50%</option>
+	   		</select>
+	   		<span style="margin-left: 72px;padding-bottom: 2px;" class="span-sub-cai">ZOOM</span>
+  		</div>
+	  
+	  	<%if(!isCaisseVerouille){%>	
+	       <std:link classStyle="btn btn-default btn-lg shiny btn-top-cai" id="delog_lnk" style="width: 71px;color: red;height: 50px;padding-top: 14px;" targetDiv="menu-detail-div" icon="fa-3x fa-sign-out" tooltip="Quitter" />
+	   <%} %>
+<%-- 	   <% if(!isCaisseVerouille && isCaisseNotFermee){ %>     --%>
+<%-- 	       <c:set var="isCaisseV" value="<%=isCaisseVerouille%>" /> --%>
+<%-- 	       <std:link classStyle="btn btn-default btn-lg shiny btn-top-cai" id='lock_lnk' style='width: 71px;height: 50px;padding-top: 14px;color:#feb800;' targetDiv="menu-detail-div" icon='fa-3x fa fa-lock' tooltip='Verrouiller' /> --%>
+<%-- 	   <%} %>     --%>
+	  <a class="refresh" id="refresh-toggler" href="javascript:" onclick="location.reload();" style="height: 50px;font-size: 25px;">
+	      <i style="color: blue;" class="glyphicon glyphicon-refresh"></i>
+	  </a>
+	  <a class="fullscreen" id="fullscreen-toggler" href="javascript:" style="height: 50px;font-size: 25px;">
+	        <i style="color: fuchsia;" class="glyphicon glyphicon-fullscreen"></i>
+	    </a>
+
+	</div>
+    <!--Header Buttons End-->
+ </div>   
+ <!-- /Page Header -->

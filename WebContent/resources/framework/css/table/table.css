@@ -1,0 +1,216 @@
+.sortable {
+	margin:0;
+	padding:0;
+	outline:none;
+	border-left:1px solid #c6d5e1;
+	border-bottom:none;
+	margin:0 auto 0px;
+	border-bottom: 0px;
+	margin-bottom: 0px;
+/* 	font-size:11px; */
+	table-layout:fixed;
+    border-collapse: collapse;/* Pour les trois points*/
+	}
+.sortable th h3 {
+	margin:0;
+	outline:none;
+	font-size:12px;
+	padding:0px 8px 2px;
+	}
+	
+.sortable tr { 
+	height: 25px;
+}
+.sortable tr div[wact]{ 
+    font-size: 4px;
+    padding: 2px 6px 4px 8px !important;
+    line-height: 1.39;
+}
+
+.sortable td {
+	margin:0;
+	padding:0;
+	outline:none;
+	padding:0px 2px 0px;
+	border-bottom:1px solid #c6d5e1;
+	border-right:1px solid #c6d5e1;
+
+	text-overflow:ellipsis;
+    overflow:hidden;
+    white-space:nowrap; /*Pour les trois points*/
+	}
+.sortable .head h3 {
+	margin:0;
+	padding:0;
+	outline:none;
+	background:url("../../img/table/sort.gif") 7px center no-repeat;
+	cursor:pointer;
+	padding-left:18px
+	}
+.sortable .desc, .sortable .asc {
+	/*background:url(../../img/table/flex/wbg.gif) repeat-x 0 -1px;
+	border: 1px solid #ccc;*/
+	color:red;
+	}
+.sortable th {
+	text-align:left;
+	background:url(../../img/table/flex/fhbg.gif);
+	border-top: 1px solid #ccc;
+	border-bottom: 1px solid #ccc;
+	/*Couper le text s'il depasse*/
+	text-overflow:ellipsis;
+    overflow:hidden;
+    white-space:nowrap;
+	
+	}
+.sortable .desc h3 {
+	margin:0;
+	padding:0;
+	outline:none;
+	background:url(../../img/table/flex/uup.png) 7px  center no-repeat;
+	cursor:pointer;
+	padding-left:18px
+	}
+.sortable .asc h3 {
+	margin:0;
+	padding:0;
+	outline:none;
+	background:url(../../img/table/flex/ddn.png) 7px  center no-repeat;
+	cursor:pointer;
+	padding-left:18px
+	}
+.sortable .head:hover, .sortable .desc:hover, .sortable .asc:hover {
+	outline:none;
+	color:orange;
+	/*border-bottom: 1px solid orange;*/
+	}
+
+.noBorder td{
+	border-left: 0px;
+	border-right: 0px;
+	border-top:0px;
+	padding:2px 0px 2px 0px;
+	text-align:center;
+}
+
+.sortable td.evenselected {
+	background:#ecf2f6
+	}
+.sortable td.oddselected {
+	background:#dce6ee
+	}
+.grid-header-bg {
+}
+
+tr.alt td{
+	background: #f9f9f9;
+}
+tr.out td{
+}
+tr.over td{
+	background: #c6deff;
+}
+
+tr.sel td{
+	background: #F9ECAC;
+}
+
+/* for global body td */
+.tdBodyContent{
+ 	background: #eeeeee;
+ 	padding: 0px;
+ 	border: 1px solid rgb(171, 183, 207);
+}
+.flexselect{
+	padding: 0px;
+}
+.flexigrid
+	{
+	position: relative;
+	border: 1px solid #888;
+	overflow: hidden;
+	box-shadow: 14px 10px 56px #aaaaaa;
+	margin-bottom: 15px;
+	}
+.flexigrid div.mDiv
+	{
+	background: url(../../img/table/wbg.gif) repeat-x top;
+	border: 1px solid #ccc;
+	border-bottom: 0px;
+	border-top: 0px;
+	font-weight: bold;
+	display: block;
+	overflow: hidden;
+	white-space: nowrap;
+	position: relative;
+	}
+	
+.flexigrid div.tDiv  {
+	background: #fafafa url(../../img/table/flex/bg.gif) repeat-x top;
+	position: relative;
+	border: 1px solid #ccc;
+	border-bottom: 0px;
+	overflow: hidden;
+	height: 30px;
+	padding-top: 5px;
+    font-size: 12px;
+}
+
+.flexigrid div.mDiv div
+	{
+	padding: 6px;
+	white-space: nowrap;
+}
+.flexigrid div.pDiv
+	{
+	height: 25px;
+	background: url(../../img/table/wbg.gif) repeat-x 0 -1px;
+	border: 1px solid #ccc;
+	border-top: 0px;
+	overflow: hidden;
+	white-space: nowrap;
+	position: relative;
+	}
+.flexigrid.ie div.hDiv th div, .flexigrid.ie  div.bDiv td  div/* common inner cell properties*/
+	{
+	overflow: hidden;
+	}
+.flexigrid div.sDiv /*toolbar*/
+	{
+	position: relative;
+	border: 1px solid #ccc;
+	overflow: hidden;
+	display: none;
+	}
+
+.flexigrid div.sDiv2
+	{
+	float: left;
+	clear: both;
+	padding: 5px;
+	padding-left: 5px;
+	width: 1024px;
+	}
+.flexigrid div.sDiv2 input, .flexigrid div.sDiv2 select
+	{
+	vertical-align: middle;
+	}
+
+/**------------------------ For dragging ------------------ */
+.ghostTd {
+	width:auto;
+	height:auto;
+	padding:2px 8px;
+	border:1px solid #000;
+	position:absolute;
+/* 	font-size:11px; */
+	background:#eee;
+}
+.dragging {background:fuchsia; color:green;}
+.hovering {background:orange; color:lime;}
+
+input[type=checkbox], input[type=radio] {
+	position: relative;
+	opacity : 100;
+	left : 0;	
+}

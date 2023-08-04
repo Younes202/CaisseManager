@@ -1,0 +1,29 @@
+<%@page import="framework.model.common.util.BooleanUtil"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.Context"%>
+<%
+boolean isDetailJourneeDroit = Context.isOperationAvailable("DETJRN");
+String tab = (String)request.getAttribute("curr_tab");
+%>
+
+<ul class="nav nav-tabs" id="myTab">
+	<%if(isDetailJourneeDroit){%>
+		<li <%="jour".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#descripton" wact="<%=EncryptionUtil.encrypt("caisse.journee.work_edit")%>"><i class="fa fa-tachometer" style="color: #03A9F4;"></i> Synthèse </a></li>
+		<li <%="chiffre_cai".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#repCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.chiffre_caisse")%>"><i class="fa fa-laptop" style="color: #3F51B5;"></i> Chiffres caisses </a></li>
+		<li <%="chiffre_empl".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#repCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.chiffre_employe")%>"><i class="fa fa-users" style="color: #3F51B5;"></i> Chiffres employés </a></li>
+		<li <%="depense".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#repCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.depenses_journee")%>"><i class="fa fa-money" style="color: #3F51B5;"></i> Dépenses/Recettes</a></li>
+	<%}%>	
+		<li <%="mvm".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" id="tab_mvm" href="#mouvementCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.find_mouvement")%>"><i class="fa fa-list" style="color: #2e7d32;"></i> Ventes </a></li>
+		<%if(BooleanUtil.isTrue(ContextGloabalAppli.getAbonementBean().isOptStock())){ %>
+			<li <%="mvmStk".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" id="tab_mvm" href="#mouvementCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.find_mvmStock")%>"><i class="fa fa-list" style="color: #2e7d32;"></i> Mvm stock </a></li>
+		<%} %>
+		<%if(ContextAppli.getUserBean().getIs_RemoteAdmin()){ %>
+		<li <%="mvmAnn".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" id="tab_mvm" href="#mouvementCaisse" wact="<%=EncryptionUtil.encrypt("caisse.journee.find_mvm_annomalie")%>"><i style="color: red;" class="fa fa-warning"></i> ANNOMALIES </a></li>
+		<%} %>
+	<%if(isDetailJourneeDroit){%>	
+		<li <%="rep".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#repartitionVente" wact="<%=EncryptionUtil.encrypt("caisse.journee.find_repartition")%>"><i class="fa fa-pie-chart" style="color: #e91e63;"></i> Rép. ventes </a></li>
+		<li <%="stck".equals(tab) ? " class='active'":"" %>><a data-toggle="tab" href="#repartitionStock" wact="<%=EncryptionUtil.encrypt("caisse.journee.find_rep_stock")%>"><i class="fa fa-pie-chart" style="color: #795548;"></i> Rép. destockage </a></li>
+	<%}%>	
+</ul>

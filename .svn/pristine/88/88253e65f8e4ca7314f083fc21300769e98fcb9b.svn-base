@@ -1,0 +1,179 @@
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="java.util.Map"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="java.util.Date"%>
+<%@page import="framework.controller.Context"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="java.util.List"%>
+<%@page import="java.math.BigDecimal"%>
+<%@page import="appli.model.domaine.vente.persistant.JourneePersistant"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%> 
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<script type="text/javascript">
+	$(document).ready(function (){
+		$(document).off('click', "a[id^='lnk_det']");
+		$(document).on('click', "a[id^='lnk_det']", function(){
+			setTrContent($(this).attr("curr"), "<%=EncryptionUtil.encrypt("stock.chargeDivers.editTrMvm")%>");
+		});
+		$(document).off('click', "span[id^='grp_parent']");
+		$(document).on('click', "span[id^='grp_parent']", function(){
+			$("."+$(this).attr("id")).toggle(500);
+		});
+	});
+</script>
+
+<style>
+#journee_body .databox .databox-text {
+	font-size: 12px;
+}
+</style>
+
+<!-- Page Breadcrumb -->
+<div class="page-breadcrumbs breadcrumbs-fixed">
+	<ul class="breadcrumb">
+		<li><i class="fa fa-home"></i> <a href="#">Accueil</a></li>
+		<li>Gestion des journées</li>
+		<li class="active">Dépenses journée</li>
+	</ul>
+</div>
+
+<div class="page-header position-relative">
+	<div class="header-title" style="padding-top: 4px;">
+		<%if(ControllerUtil.getMenuAttribute("IS_DASH_JRN", request) == null){ %>
+			<std:link classStyle="btn btn-default" action="caisse.journee.work_find" params="bck=1" icon="fa fa-3x fa-mail-reply-all" tooltip="Retour &agrave; la recherche" />
+		<%} %>
+	</div>
+	<!--Header Buttons-->
+	<jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+	<!--Header Buttons End-->
+</div>
+<!-- /Page Header -->
+
+<div class="page-body" id="journee_body">
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+
+	<!-- widget grid -->
+	<div class="widget">
+		<std:form name="data-form">
+			<div class="row">
+				<div class="col-lg-12 col-sm-12 col-xs-12">
+					<div class="widget-main ">
+						<div class="tabbable">
+							<%request.setAttribute("curr_tab", "depense"); %>
+							<jsp:include page="journee_tab_header.jsp" />
+
+							<div class="tab-content">
+								<h3 style="text-align: center;">Journée du <fmt:formatDate value="${journee.date_journee}" /></h3>
+								<hr>
+								<div class="row">
+									<div class="col-lg-6 col-md-6 col-sm-6 col-xs-12">
+										<!-- Liste des chargeDivers -->
+										<cplx:table name="list_chargeDivers" transitionType="simple" forceFilter="true" width="100%" title="Dépenses caisse" checkable="false" initAction="stock.chargeDivers.work_find" autoHeight="true">
+											<cplx:header>
+												<cplx:th type="empty" />
+												<cplx:th type="date" valueKey="chargeDivers.date_mouvement" field="chargeDivers.date_mouvement" width="100" filterOnly="true"/>
+												
+												<cplx:th type="string" valueKey="chargeDivers.num_bl" field="chargeDivers.num_bl" width="150"/>
+												<cplx:th type="string" valueKey="chargeDivers.libelle" field="chargeDivers.libelle"/>
+												<cplx:th type="long[]" valueKey="chargeDivers.type_depense" field="chargeDivers.opc_famille_consommation.id" groupValues="${familleConsommation }" groupKey="id" groupLabel="code;'-';libelle" width="170"/>
+												<cplx:th type="long[]" valueKey="chargeDivers.opc_fournisseur" field="chargeDivers.opc_fournisseur.id" groupValues="${listeFournisseur }" groupKey="id" groupLabel="libelle"/>
+												<cplx:th type="string" valueKey="chargeDivers.opc_financement_enum" field="chargeDivers.opc_financement_enum.libelle" sortable="false" filtrable="false" width="100"/>
+												<cplx:th type="string" value="TVA" field="chargeDivers.opc_tva_enum.id" groupValues="${listeTva }" groupKey="id" groupLabel="libelle" width="80"/>
+												<cplx:th type="decimal" valueKey="chargeDivers.montant" field="chargeDivers.montant" width="100"/>
+												<cplx:th type="empty" width="130"/>
+											</cplx:header>
+											<cplx:body>
+											
+												<c:set var="oldDate" value="${null }"></c:set>
+												<c:forEach items="${list_chargeDivers }" var="chargeDivers">
+													<c:if test="${oldDate == null  or oldDate != chargeDivers.date_mouvement }">
+														<tr>
+															<td colspan="9" noresize="true" class="separator-group">
+																<span class="fa fa-fw fa-folder-open-o separator-icon"></span> <fmt:formatDate value="${chargeDivers.date_mouvement}"/>
+															</td>
+														</tr>	
+													</c:if>
+													<c:set var="oldDate" value="${chargeDivers.date_mouvement }"></c:set>
+													
+													<cplx:tr workId="${chargeDivers.id }">
+														<cplx:td>
+															<std:link actionGroup="C" classStyle="btn btn-sm btn-primary" workId="${chargeDivers.id }" action="stock.chargeDivers.work_edit" params="tpR=CH" icon="fa-3x fa fa-eye" tooltip="Groupe BL" />
+														</cplx:td>
+														<cplx:td>
+															<c:if test="${chargeDivers.is_automatique}">
+																<i class="fa fa-clock-o" style="color: green;"></i>
+															</c:if>	
+															<a href="javascript:" id="lnk_det" curr="${chargeDivers.id}"><span class="fa fa-plus" style="color:green;"></span> 
+																${empty chargeDivers.num_bl ? '------------' : chargeDivers.num_bl }
+															</a>
+														</cplx:td>
+														<cplx:td value="${chargeDivers.libelle}"></cplx:td>
+														<cplx:td value="${chargeDivers.opc_famille_consommation.code}-${chargeDivers.opc_famille_consommation.libelle}"></cplx:td>
+														<cplx:td value="${chargeDivers.opc_fournisseur.libelle}"></cplx:td>
+														<cplx:td value="${chargeDivers.getPaiementsStr()}"></cplx:td>
+														<cplx:td align="right" style="font-weight:bold;" value="${chargeDivers.opc_tva_enum.libelle}"></cplx:td>
+														<cplx:td align="right" style="font-weight:bold;" value="${chargeDivers.montant}"></cplx:td>
+														<cplx:td align="right">
+													 		<c:choose>
+													 			<c:when test="${chargeDivers.is_automatique and chargeDivers.is_active}">
+													 				<std:link action="stock.chargeDivers.controleAutomate" icon="fa fa-pause" workId="${chargeDivers.id }" noJsValidate="true" tooltip="D&eacute;sactiver" classStyle="btn btn-sm btn-warning shiny"/>
+													 				<std:linkPopup actionGroup="U" action="stock.chargeDivers.automateCharge" icon="fa fa-pencil-square-o" noJsValidate="true" workId="${chargeDivers.id }" tooltip="Automatiser" classStyle="btn btn-sm btn-sky shiny"/>
+													 			</c:when>
+													 			<c:when test="${chargeDivers.is_automatique}">
+													 				<std:link action="stock.chargeDivers.controleAutomate" icon="fa fa-play" workId="${chargeDivers.id }" noJsValidate="true" tooltip="Activer" classStyle="btn btn-sm btn-success shiny"/>
+													 				<std:linkPopup actionGroup="U" action="stock.chargeDivers.automateCharge" icon="fa fa-pencil-square-o" noJsValidate="true" workId="${chargeDivers.id }" tooltip="Automatiser" classStyle="btn btn-sm btn-sky shiny"/>
+													 			</c:when>
+													 			<c:otherwise>
+													 				<std:linkPopup action="stock.chargeDivers.automateCharge" icon="fa fa-clock-o" workId="${chargeDivers.id }" noJsValidate="true" tooltip="Automatiser" classStyle="btn btn-sm btn-success"/>
+													 			</c:otherwise>
+													 		</c:choose>
+													 		
+													 		<work:delete-link/>
+														</cplx:td>
+													</cplx:tr>
+													<tr style="display: none;" id="tr_det_${chargeDivers.id}" class="sub">
+														<td colspan="10" noresize="true" style="background-color: #fff4d3;cursor: default;" align="center" id="tr_consult_${chargeDivers.id}">
+															
+														</td>
+													</tr>
+												<!-- ********************************* End detail **************************************** -->
+													
+												</c:forEach>
+										<c:if test="${list_chargeDivers.size() > 0 }">
+												<tr class="sub">
+													<td colspan="7"></td>
+													<td align="right">
+														<span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">
+															<fmt:formatDecimal value="${totalTtc }"/>
+														</span>
+													</td>
+													<td></td>
+													<td></td>
+												</tr>
+										</c:if>		
+											</cplx:body>
+										</cplx:table>
+									</div>
+								</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		</std:form>
+	</div>
+</div>
+

@@ -1,0 +1,154 @@
+package appli.controller.domaine.habilitation.action;
+
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+
+import appli.controller.domaine.habilitation.bean.ProfileBean;
+import appli.controller.domaine.util_erp.ContextAppli.SOFT_ENVS;
+import appli.controller.domaine.util_erp.ContextAppli.TYPE_CAISSE_ENUM;
+import appli.model.domaine.habilitation.persistant.ProfilePersistant;
+import appli.model.domaine.habilitation.service.IProfileService;
+import appli.model.domaine.habilitation.service.impl.ProfileService;
+import framework.component.complex.table.RequestTableBean;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.annotation.WorkController;
+import framework.model.common.constante.ActionConstante;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+
+@WorkController(nameSpace="hab", bean=ProfileBean.class, jspRootPath="/domaine/habilitation/")
+public class ProfileAction extends ActionBase {
+	@Inject
+	IProfileService profilService;
+	
+	/**
+	 * @param httpUtil
+	 * @throws Exception
+	 */
+	public void work_init(ActionUtil httpUtil) {
+		if(httpUtil.isEditionPage()){
+			Long profileId = httpUtil.getWorkIdLong();
+			if(profileId != null){
+				httpUtil.setMenuAttribute("profileId", profileId);
+			} else{
+				profileId = (Long)httpUtil.getMenuAttribute("profileId");
+			}
+			if(!httpUtil.isCreateAction()){
+				// Gérer le retour sur cet onglet
+				profileId = (Long)httpUtil.getMenuAttribute("profileId");
+				if(profileId != null && !httpUtil.isCrudOperation()){
+					loadBean(httpUtil, profileId);
+					httpUtil.setMenuAttribute("profileBean", httpUtil.getViewBean());
+				}
+			} else{
+				httpUtil.removeMenuAttribute("profileId");
+			}
+			
+			if(profileId != null){
+				ProfileBean profileBean = profilService.findById(profileId);
+				if(profileBean.getCode().equals(ProfileService.PROFIL_CODE_ENUM.ADMIN.toString())){
+					httpUtil.setRequestAttribute("IS_ADMIN", true);
+				}
+			}
+			
+			//-------------------------------------------------------------------
+			String context = StrimUtil.getGlobalConfigPropertie("context.soft");
+			boolean isRestau = SOFT_ENVS.restau.toString().equals(context);
+			boolean isMarket = SOFT_ENVS.market.toString().equals(context);		
+			
+			Map<String, String> envs = new LinkedHashMap<>();
+			Map<String, String> mobileEnvs = new LinkedHashMap<>();
+			
+			// App mobile ------------------
+			mobileEnvs.put("mob-livreur", "Espace mobile livreur");
+			//mobileEnvs.put("mob-client", "Espace mobile client");
+			if(isRestau) {
+				mobileEnvs.put("mob-serveur","Espace mobile serveur");
+			}
+			//--------------------------------
+			
+			//
+			envs.put(TYPE_CAISSE_ENUM.BACKOFFICE.toString(), TYPE_CAISSE_ENUM.BACKOFFICE.getLibelle());
+			
+			if(isMarket || isRestau){
+				envs.put(TYPE_CAISSE_ENUM.CAISSE.toString(), TYPE_CAISSE_ENUM.CAISSE.getLibelle());
+				envs.put(TYPE_CAISSE_ENUM.AFFICHEUR.toString(), TYPE_CAISSE_ENUM.AFFICHEUR.getLibelle());
+			}
+
+			if(isRestau) {
+				envs.put(TYPE_CAISSE_ENUM.PRESENTOIRE.toString(), TYPE_CAISSE_ENUM.PRESENTOIRE.getLibelle());
+				envs.put(TYPE_CAISSE_ENUM.PILOTAGE.toString(), TYPE_CAISSE_ENUM.PILOTAGE.getLibelle());
+				envs.put(TYPE_CAISSE_ENUM.CUISINE.toString(), TYPE_CAISSE_ENUM.CUISINE.getLibelle());
+				envs.put(TYPE_CAISSE_ENUM.AFFICLIENT.toString(), TYPE_CAISSE_ENUM.AFFICLIENT.getLibelle());
+				envs.put(TYPE_CAISSE_ENUM.CAISSE_CLIENT.toString(), TYPE_CAISSE_ENUM.CAISSE_CLIENT.getLibelle());
+			}
+			if(isMarket){
+				envs.put(TYPE_CAISSE_ENUM.BALANCE.toString(), TYPE_CAISSE_ENUM.BALANCE.getLibelle());
+			}
+			if(isMarket){
+				envs.put(TYPE_CAISSE_ENUM.LECTEUR.toString(), TYPE_CAISSE_ENUM.LECTEUR.getLibelle());
+			} 
+			
+			httpUtil.setRequestAttribute("envs", envs);
+			httpUtil.setRequestAttribute("envsMobile", mobileEnvs);
+			//-------------------------------------------------------------------
+		}
+		
+		if(ActionConstante.MERGE.equals(httpUtil.getAction())) {
+			Map<String, Object> vals = httpUtil.getValuesByStartName("profile_");
+			String valsStr = "";
+			for (String key : vals.keySet()) {
+				if(StringUtil.isEmpty(vals.get(key))) {
+					continue;
+				}
+				valsStr += ";"+key;
+			}
+			valsStr += ";";
+			
+			((ProfileBean)httpUtil.getViewBean()).setEnvs(valsStr);
+		}
+	}
+	
+	@Override
+	public void work_find(ActionUtil httpUtil) {
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_profile");
+		List<ProfilePersistant> listData = (List<ProfilePersistant>) profilService.findByCriteriaByQueryId(cplxTable, "profile_find");
+
+		Map<Long, String> mapPrfl = new HashMap<>();
+		for (ProfilePersistant profileP : listData) {
+			if(StringUtil.isEmpty(profileP.getEnvs())) {
+				continue;
+			}
+			String[] data = StringUtil.getArrayFromStringDelim(profileP.getEnvs(), ";");
+			
+			if(data != null && data.length > 0) {
+				String st = " | ";
+				for (String val : data) {
+					if(StringUtil.isEmpty(val)) {
+						continue;
+					}
+					try {st += "<span style='font-weight:bold;'>"+TYPE_CAISSE_ENUM.valueOf(val)+"</span> | ";} catch(Exception e) {}
+				}
+				mapPrfl.put(profileP.getId(), st);
+			}
+		}
+		
+		httpUtil.setRequestAttribute("mapPrfl", mapPrfl);
+		httpUtil.setRequestAttribute("list_profile", listData);
+		
+		httpUtil.setDynamicUrl("/domaine/habilitation/profile_list.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void desactiver(ActionUtil httpUtil) {
+		profilService.activerDesactiverElement(httpUtil.getWorkIdLong());
+		work_find(httpUtil);
+	}
+}

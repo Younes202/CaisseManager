@@ -1,0 +1,100 @@
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="fn"%>
+<%@page errorPage="/commun/error.jsp" %>
+
+ <!-- Page Breadcrumb -->
+ <div class="page-breadcrumbs breadcrumbs-fixed">
+     <ul class="breadcrumb">
+         <li>
+             <i class="fa fa-home"></i>
+             <a href="#">Accueil</a>
+         </li>
+         <li>Portefeuille client</li>
+         <li class="active">Recherche</li>
+     </ul>
+ </div>
+<!-- /Page Breadcrumb -->
+  <!-- Page Header -->
+  <div class="page-header position-relative">
+      <div class="header-title" style="padding-top: 4px;">
+      </div>
+      <!--Header Buttons-->
+      <jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+      <!--Header Buttons End-->
+  </div>
+  <!-- /Page Header -->
+
+<!-- Page Body -->
+<div class="page-body">
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+
+	<!-- row -->
+	<div class="row">
+<std:form name="search-form">
+	<!-- Liste des articles -->
+	<cplx:table name="list_portefeuille" transitionType="simple" width="100%" title="Portefeuilles des clients" initAction="fidelite.portefeuille.work_find" autoHeight="true" checkable="false">
+		<cplx:header>
+					<cplx:th type="empty" />
+					<cplx:th type="string" valueKey="client.numero" field="client.numero" width="120" />
+					<cplx:th type="string" value="Nom et prénom" field="client.nom" filtrable="false"/>
+					<cplx:th type="string" valueKey="client.nom" field="client.nom" filterOnly="true"/>
+					<cplx:th type="string" valueKey="client.prenom" field="client.prenom" filterOnly="true" />
+					<cplx:th type="string" valueKey="employe.cin" field="client.cin" width="100" />
+					<cplx:th type="string" value="Téléphone" field="client.telephone" width="120" />
+					<cplx:th type="string" value="Téléphone2" field="client.telephone2" width="120" />
+					<cplx:th type="string" value="Mail" field="client.mail" />
+					<cplx:th type="string" valueKey="adresse.adresse" field="client.opc_adresse" sortable="false" filtrable="false" />
+					<cplx:th type="decimal" value="Montant fidélité" sortable="false" filtrable="false" width="100" />
+					<cplx:th type="decimal" value="Montant portefeuille" sortable="false" filtrable="false" width="100" />
+				</cplx:header>
+				<cplx:body>
+					<c:forEach items="${list_Clientportefeuille }" var="client">
+						<cplx:tr workId="${client.id }" style="${client.is_disable?'text-decoration: line-through;':'' }">
+							<cplx:td>
+								<work:edit-link />
+							</cplx:td>
+							<cplx:td>
+								${client.numero} 
+								${client.list_cartes.size() > 0 ? '<i style="color:#d73d32;" class="fa fa-credit-card"></i>':'' }
+							</cplx:td>
+							<cplx:td style="font-weight:bold;">
+								<c:choose>
+									<c:when test="${client.civilite == 'H'}">
+										<c:set var="civilite" value="Mr." />
+									</c:when>
+									<c:otherwise>
+										<c:set var="civilite" value="Mme." />
+									</c:otherwise>
+								</c:choose>
+								${civilite} ${client.nom} ${client.prenom}
+								<c:if test="${client.signature != null}">  
+									<i class="fa fa-info-circle" title="Créér par ${client.signature}"></i>
+								</c:if> 
+							</cplx:td>
+							<cplx:td value="${client.cin}"></cplx:td>
+							<cplx:td value="${client.telephone}"></cplx:td>
+							<cplx:td value="${client.telephone2}"></cplx:td>
+							<cplx:td value="${client.mail}"></cplx:td>
+							<cplx:td value="${client.getAdressFull()}"></cplx:td>
+							<cplx:td align="right" style="color:blue;font-weight:bold;" value="${carteFideliteService.getCarteClientActive(client.id).mtt_total}"></cplx:td>
+							<cplx:td align="right" style="color:blue;font-weight:bold;" value="${client.solde_portefeuille}"></cplx:td>
+						</cplx:tr>
+					</c:forEach> 
+				</cplx:body>
+			</cplx:table>
+ </std:form>			
+
+ </div>
+					<!-- end widget content -->
+
+				</div>
+				<!-- end widget div -->

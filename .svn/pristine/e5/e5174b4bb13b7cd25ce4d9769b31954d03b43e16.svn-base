@@ -1,0 +1,40 @@
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<std:form name="data-form">
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">Transfert de ** <span style="color: blue;font-weight: bold;">${currArt }</span> ** vers un client</span>
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			<div class="row" style="margin-left: 13px;">
+				<div class="form-group">
+					<div class="col-md-12">
+						<std:label classStyle="control-label col-md-12" value="Client destination" />
+					</div>	
+				</div>
+				<div class="form-group">
+					<div class="col-md-12">
+						<std:select name="target_client" required="true" forceWriten="true" type="string" width="80%" data="${clientIdxArray }" addBlank="false" />
+					</div>
+				</div>
+				<div class="row" style="text-align: center;">
+					<div class="col-md-12">
+						<std:button actionGroup="C" style="border-radius: 37px;height: 52px;font-size: 21px;" classStyle="btn btn-success" targetDiv="left-div" action="caisse-web.caisseWeb.transfertArtMnu" icon="fa-mail-forward" value="Transf&eacute;rer" />
+						<button type="button" id="close_modal" style="border-radius: 37px;height: 52px;font-size: 21px;" class="btn btn-primary" data-dismiss="modal">
+							<i class="fa fa-times"></i> Fermer
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</std:form>

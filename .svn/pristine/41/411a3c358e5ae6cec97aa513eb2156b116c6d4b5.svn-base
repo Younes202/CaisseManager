@@ -1,0 +1,105 @@
+package appli.model.domaine.personnel.validator;
+
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import appli.controller.domaine.personnel.bean.EmployeBean;
+import appli.model.domaine.personnel.dao.IEmployeDao;
+import framework.model.common.service.MessageService;
+
+@Named
+public class EmployeValidator {
+	@Inject
+	private IEmployeDao employeDao;
+	
+	/* (non-Javadoc)
+	 * @see model.service.commun.validator.ActionValidator#validate(java.lang.Object, java.lang.String)
+	 */
+	public void updateCreateValidator(EmployeBean employeBean) {
+		// Le numéro de sécurité doit être unique
+		if(employeDao.isNotUnique(employeBean, "numero")){
+			MessageService.addFieldMessageKey("employe.numero", "msg.valeur.exist");
+		}
+
+	}
+	
+	/**
+	 * @param viewBean
+	 * @throws Exception
+	 */
+	public void update(EmployeBean employeBean) {
+		updateCreateValidator(employeBean);
+	}
+	
+	/**
+	 * @param viewBean
+	 * @throws Exception
+	 */
+	public void create(EmployeBean employeBean){
+		updateCreateValidator(employeBean);
+	}
+		
+	public void delete(Long emplId){
+		// User
+		List listData = employeDao.getQuery("from UserPersistant where opc_employe.id=:emplId")
+			.setParameter("emplId", emplId)
+			.getResultList();
+		if(listData.size() > 0){
+			MessageService.addBannerMessage("Cet employé est associé à un utilisateur.");
+			return;
+		}
+		// Mouvement
+		listData = employeDao.getQuery("from CaisseMouvementPersistant where opc_employe.id=:emplId")
+				.setParameter("emplId", emplId)
+				.getResultList();
+		if(listData.size() > 0){
+			MessageService.addBannerMessage("Cet employé est associé à des mouvements caisse.");
+			return;
+		}
+		
+		// Mouvement
+//		listData = employeDao.getQuery("from CaisseMouvementPersistant where opc_livreurU.id=:emplId")
+//				.setParameter("emplId", emplId)
+//				.getResultList();
+//		if(listData.size() > 0){
+//			MessageService.addBannerMessage("Cet employé est associé à des mouvements caisse.");
+//			return;
+//		}
+				
+		// Inventaire
+		listData = employeDao.getQuery("from InventairePersistant where opc_responsable.id=:emplId or opc_saisisseur.id=:emplId")
+				.setParameter("emplId", emplId)
+				.getResultList();
+		if(listData.size() > 0){
+			MessageService.addBannerMessage("Cet employé est associé à des inventaires.");
+			return;
+		}
+		
+		listData = employeDao.getQuery("from InventairePersistant where opc_responsable.id=:emplId or opc_saisisseur.id=:emplId")
+				.setParameter("emplId", emplId)
+				.getResultList();
+		if(listData.size() > 0){
+			MessageService.addBannerMessage("Cet employé est associé à des inventaires.");
+			return;
+		}
+		// SalairePersistant
+		listData = employeDao.getQuery("from SalairePersistant where opc_employe.id=:emplId")
+				.setParameter("emplId", emplId)
+				.getResultList();
+		if(listData.size() > 0){
+			MessageService.addBannerMessage("Cet employé est associé à des salaires.");
+			return;
+		}
+	}
+	
+	/**
+	 * @param ids
+	 */
+	public void delete_group(Long[] ids){
+		for (Long artId : ids) {
+			delete(artId);
+		}
+	}
+}

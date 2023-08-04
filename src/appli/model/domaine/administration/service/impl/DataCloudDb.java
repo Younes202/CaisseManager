@@ -1,0 +1,641 @@
+package appli.model.domaine.administration.service.impl;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.PersistenceUnit;
+
+import org.hibernate.internal.SessionImpl;
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.service.IEtablissementService;
+import appli.model.domaine.administration.service.IRequeteurService;
+import framework.controller.FileUtilController;
+import framework.model.beanContext.AbonnePersistant;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.beanContext.SocietePersistant;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.EncryptionEtsUtil;
+import framework.model.common.util.EncryptionUtil64;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.util.FileUtil;
+
+@Named
+public class DataCloudDb {
+	@Inject
+	private IRequeteurService requeteurService;
+	@Inject
+	private IEtablissementService etsService;
+
+	@PersistenceUnit
+	private EntityManagerFactory emf;
+	
+	@Transactional
+	public String disableCLoudCliEts(String codeAuth) {
+		try {
+			EntityManager em = etsService.getEntityManager();
+			EtablissementPersistant localEts = getEts(em, codeAuth);
+						
+			if(localEts == null) {
+				return "OK";
+			}
+			
+			localEts.setIs_disable(true);
+			//
+			em.merge(localEts);
+			return "OK";
+		} catch(Exception e) {
+			e.printStackTrace();
+			return "KO";
+		}
+	}
+	private EtablissementPersistant getEts(EntityManager em, String codeAuth) {
+		EtablissementPersistant localEts = (EtablissementPersistant) etsService.getSingleResult(
+				em.createQuery("from EtablissementPersistant where code_authentification=:codeAuth")
+					.setParameter("codeAuth", codeAuth));
+		return localEts;
+	}
+	
+	@Transactional
+	public String updateCLoudCliEts(String codeAuth, String tokenUrl, String abnConf) {
+		try {
+			EntityManager em = etsService.getEntityManager();
+			EtablissementPersistant localEts = getEts(em, codeAuth);
+			
+			if(StringUtil.isNotEmpty(abnConf)){
+				localEts.setAbonnement(abnConf);
+			}
+			
+			if(StringUtil.isNotEmpty(tokenUrl)) {
+				localEts.setToken(tokenUrl);
+			}
+			//
+			em.merge(localEts);
+			return "OK";
+		} catch(Exception e) {
+			e.printStackTrace();
+			return "KO";
+		}
+	}
+	
+	public String downloadDataBaseCLoudCliEts(String codeAuth) {
+		EntityManager em = null;
+		Statement statement = null;
+		StringBuilder sb = new StringBuilder();
+		String _SEPRATOR = "\n";
+		
+		try {
+			List<String> listTables = requeteurService.getListTables();
+			em = emf.createEntityManager();
+			Connection con = getConnection(em);	
+			statement = con.createStatement();
+			EtablissementPersistant localEts = getEts(em, codeAuth);
+			
+			//
+			for (String tableName : listTables) {
+				if(tableName.endsWith("_view") 
+						|| tableName.equals("data_synchronise")
+						|| tableName.startsWith("hibernate_")
+						|| tableName.equals("region")
+						|| tableName.equals("ville")
+						) {
+					continue;
+				}
+				
+				String req = "select * from "+tableName+" WHERE etablissement_id="+localEts.getId()+" order by id";
+				//
+				if(tableName.equalsIgnoreCase("restaurant")){
+					req = "select * from restaurant WHERE id="+localEts.getId()+" order by id";
+				} else if(tableName.equalsIgnoreCase("abonne")){
+					req = "select * from abonne WHERE id="+localEts.getOpc_abonne().getId()+" order by id";
+				} else if( tableName.equalsIgnoreCase("societe")) {
+					req = "select * from societe WHERE id="+localEts.getOpc_societe().getId()+" order by id";
+				}
+				
+				ResultSet rs = statement.executeQuery(req);
+				if(rs == null) {
+					continue;
+				}
+				
+				ResultSetMetaData rsmd = rs.getMetaData();
+				
+				String cols = "";
+				List<String> listNames = new ArrayList<>();
+				for(int i=0; i<rsmd.getColumnCount(); i++) {
+					String colName = rsmd.getColumnName(i+1);
+					String columnType = rsmd.getColumnTypeName(i+1);
+					listNames.add(columnType);
+					
+					cols += colName+",";
+				}
+				cols = cols.substring(0, cols.length()-1);
+				
+				sb.append("INSERT INTO "+tableName+"("+cols+") VALUES ");
+				String data = "";
+				while (rs.next()) {
+					String subData = "(";
+					 for (int i = 0; i< rsmd.getColumnCount(); i++) {
+						 Object val = rs.getObject(i+1);
+						if(val == null || "null".equals(""+val)) {
+							subData += "NULL,";
+						 } else {
+							 if("VARCHAR".equals(listNames.get(i)) 
+									 || "LONGTEXT".equals(listNames.get(i))
+									 || "DATETIME".equals(listNames.get(i))) {
+								 subData += "'"+(""+val).replaceAll("'", "''")+"',";
+							 } else {
+								 subData += val+",";
+							 }
+						 }
+					 }
+					 subData = subData.substring(0, subData.length()-1);
+					 subData += "),"+_SEPRATOR;
+					 
+					 data += subData;
+				}
+				if(data.length() > 0) {
+					data = data.substring(0, data.length()-(_SEPRATOR.length()+2))+_SEPRATOR;
+					sb.append(data);
+				}	
+				sb.append(");"+_SEPRATOR);
+				
+				rs.close();
+				
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		} finally {
+			if(statement != null) {
+				try {
+					statement.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+			if(em != null) {
+				em.close();
+			}
+		}
+		
+		return sb.toString();
+	}		
+	
+	public void initCLoudCliEts(String abnName, String etsName, 
+			String tokenUrl, String codeAuth, String codeAuthCrypt, String remotePw) {
+		
+		if(StringUtil.isEmpty(remotePw)) {
+			remotePw = "RemoteAdminALL";
+		}
+		
+		EntityManager em = null;
+		Statement statement = null;
+		BufferedReader br = null;
+		FileReader fr = null;
+		boolean isErr = false;
+		
+		String abonnementConf = null;
+		String abonnementConfDyc = null;
+		String dycKey = null;
+		try {
+			em = emf.createEntityManager();
+			EtablissementPersistant localEts = getEts(em, codeAuth);
+			
+			if(localEts != null) {
+				em.close();
+				return;
+			}
+			
+			// 0: abonnement,     1:conf,            2:cle crytptage client               3:isNewVersion
+			String cloudUrl = StrimUtil.getGlobalConfigPropertie("caisse.cloud.url")+"/update";
+			String retourAbonnement = FileUtilController.callURL(cloudUrl+"?mt=abonmnt&auth="+codeAuth+"&isFAbn=1");
+			if(StringUtil.isNotEmpty(retourAbonnement)){
+				String[] retourArray = retourAbonnement.split("\\|");
+				abonnementConf = retourArray[0];
+				dycKey = EncryptionUtil64.decrypt64(retourArray[2]);
+			}
+			EncryptionEtsUtil encryptionEtsUtil = new EncryptionEtsUtil(dycKey);
+			abonnementConfDyc = encryptionEtsUtil.decrypt(abonnementConf);
+			
+			em.getTransaction().begin();		
+			Connection con = getConnection(em);	
+			statement = con.createStatement();
+	
+		   	String currDt = DateUtil.dateToString(new Date(), "yyyy-MM-dd HH:mm:ss");
+		   	// Vérifier si l'abonné n'existe pas déjà
+		   	AbonnePersistant localAbonne = (AbonnePersistant) etsService.getSingleResult(
+					em.createQuery("from AbonnePersistant where code_func=:codeFunc")
+						.setParameter("codeFunc", "ABN_"+codeAuth));
+		   	
+		   	Long abonneId = null;
+			if(localAbonne == null) {
+				String abnReq = "INSERT INTO `abonne` (`raison_sociale`, `code_func`) VALUES " + 
+						"		('"+abnName+"', 'ABN_"+codeAuth+"');";
+				abonneId = executeInsert(em, statement, abnReq);
+			} else {
+				abonneId = localAbonne.getId();
+			}
+			
+			Long societeId = null;
+			SocietePersistant localSociete = (SocietePersistant) etsService.getSingleResult(
+					em.createQuery("from SocietePersistant where code_func=:codeFunc")
+						.setParameter("codeFunc", "SOC_"+codeAuth));
+			if(localSociete == null) {
+				String socReq = "INSERT INTO `societe` (`raison_sociale`, `date_creation`, abonne_id, code_func) VALUES " + 
+						"		('"+abnName+"', '"+currDt+"', "+abonneId+", 'SOC_"+codeAuth+"');";
+				societeId = executeInsert(em, statement, socReq);
+			} else {
+				societeId = localSociete.getId();
+			}
+			
+			Long etsId = null;
+			if(localEts == null) {
+				String etsReq = "INSERT INTO `restaurant` (`code_authentification`, `nom`, `raison_sociale`, abonne_id, societe_id, code_func) VALUES "+ 
+						"		('"+codeAuth+"', '"+etsName+"', '"+etsName+"', "+abonneId+", "+societeId+", 'ETS_"+codeAuth+"');";
+				etsId = executeInsert(em, statement, etsReq);
+			}
+					
+			String[] requetes = StringUtil.getArrayFromStringDelim(_GET_SCRIPT_INIT_CLOUD(abonneId, societeId, etsId, currDt), ";");
+				
+			String remotePwCrypt = encryptionEtsUtil.encrypt(remotePw);
+			String pwUser = encryptionEtsUtil.encrypt("01");
+				
+			Long insertedId = null;
+			for(String req : requetes) {
+				if(StringUtil.isEmpty(req)) {
+					continue;
+				}
+				req = req.trim();
+				req = req.replaceAll("INSERTED_ID", ""+insertedId);
+				req = req.replaceAll("CD_FUNC", getCodeFunc(em, SocietePersistant.class));
+				req = req.replaceAll("xxREMOTE_PWxx", remotePwCrypt);
+				req = req.replaceAll("xxUSER_PWxx", pwUser);
+				//
+				insertedId = executeInsert(em, statement, req);
+			}
+		
+			em.getTransaction().commit();
+		} catch (Exception e) {
+			em.getTransaction().rollback();
+			e.printStackTrace();
+			isErr = true;
+		} finally {
+			try {
+				if(statement != null) {
+					statement.close();
+				}
+				if (br != null)
+					br.close();
+				if (fr != null)
+					fr.close();
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+		}
+		
+		// Maj abonnement, conf et date ----------------------------
+		if(!isErr) {
+			try {
+				em.getTransaction().begin();
+				EtablissementPersistant localEts = getEts(em, codeAuth);
+				
+				MessageService.getGlobalMap().put("IS_SYNCHRO", true);
+				
+				// 0: abonnement,     1:conf,            2:cle crytptage client               3:isNewVersion
+				if(StringUtil.isNotEmpty(abonnementConf)){
+					localEts.setAbonnement(abonnementConf);
+					localEts.setDyc_key(dycKey);
+					localEts.setDate_synchro(new Date());
+					localEts.setToken(tokenUrl);
+					localEts.setIs_synchro_cloud(abonnementConfDyc.indexOf("OPTPLUS_SYNCHRO_CLOUD") != -1);
+					//
+					em.merge(localEts);
+				}
+				em.getTransaction().commit();;
+			} catch(Exception e) {
+				em.getTransaction().rollback();
+				e.printStackTrace();
+			} finally {
+				
+			}
+		}
+		if(em != null) {
+			em.close();
+		}
+	}
+
+	private final static String DISABLE_CONTRAINTS = "SET FOREIGN_KEY_CHECKS=0";
+	private final static String ENABLE_CONTRAINTS = "SET FOREIGN_KEY_CHECKS=1";
+	
+	public String deleteCLoudCliEts(String codeAuth) {
+		EntityManager em = emf.createEntityManager();
+		
+		EtablissementPersistant localEts = getEts(em, codeAuth);
+					
+		if(localEts == null) {
+			return "OK";
+		}
+		Long etsId = localEts.getId();
+		Long abonneId = localEts.getOpc_abonne().getId();
+		Long societeId = localEts.getOpc_societe().getId();
+		//
+		Connection connection = getConnection(em);
+		PreparedStatement statement = null;
+		try {
+			em.getTransaction().begin();
+			// Desactivation des contraintes
+			statement = connection.prepareStatement(DISABLE_CONTRAINTS);
+			statement.executeUpdate();
+			statement.close();
+			
+			// Purge
+			purgeBaseAbonne(etsId, connection);
+			
+			em.createQuery("delete from EtablissementPersistant where id=:etsId")
+				.setParameter("etsId", etsId)
+				.executeUpdate();
+			// Commit
+			em.getTransaction().commit();
+		
+			// Purger les répertoires
+			boolean isDeleted = FileUtil.clearDir("restau/"+etsId);
+			// On retente
+			if(!isDeleted){
+				isDeleted = FileUtil.clearDir("restau/"+etsId);
+			}
+			
+			// Si abonné et société orphelin alors supprimer également
+			List<EtablissementPersistant> listEts = em.createQuery("from EtablissementPersistant where opc_abonne.id=:abonneId")
+				.setParameter("abonneId", abonneId)
+				.getResultList();
+			if(listEts.size()  == 0) {
+				em.getTransaction().begin();
+				
+				em.createQuery("delete from AbonnePersistant where id=:abnId")
+				.setParameter("abnId", abonneId)
+				.executeUpdate();
+				
+				em.createQuery("delete from SocietePersistant where id=:socId")
+				.setParameter("socId", societeId)
+				.executeUpdate();
+				
+				em.getTransaction().commit();
+			}
+			return "OK";
+		} catch (Exception e) {
+			em.getTransaction().rollback(); 
+			e.printStackTrace();
+			return "KO";
+		} finally{
+			try{
+				 // Réactivation des contraintes
+				em.getTransaction().begin();
+				statement = connection.prepareStatement(ENABLE_CONTRAINTS);
+				statement.executeUpdate();
+				statement.close();
+				em.getTransaction().commit();
+				em.close();
+			} catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	private void purgeBaseAbonne(Long etsId, Connection connection) throws SQLException {
+		String dataBaseName = connection.getCatalog();
+		String req = "SELECT table_name FROM information_schema.COLUMNS where table_schema='"+dataBaseName+"' and COLUMN_NAME='etablissement_id'";
+		Statement statement = connection.createStatement();
+		ResultSet rs = statement.executeQuery(req);
+		//--------------------------------
+        while (rs.next()) {
+            String table_name = rs.getString("table_name");
+			
+            if(table_name.endsWith("_view") 
+					|| table_name.startsWith("hibernate_")
+					|| table_name.equals("region")
+					|| table_name.equals("ville")
+					) {
+				continue;
+			}
+            
+			String reqDelete = "delete from "+table_name+" where etablissement_id="+etsId;
+			PreparedStatement statementDel = connection.prepareStatement(reqDelete);
+			int nbrDelete = statementDel.executeUpdate();
+			statementDel.close();
+        }
+		statement.close();
+	}
+	
+	private String _GET_SCRIPT_INIT_CLOUD(Long abonneId, Long societeId, Long etsId, String currDt) {
+		String soft = StrimUtil.getGlobalConfigPropertie("context.soft");
+		String requete = "";
+		
+		boolean isRestau = soft.equals(ContextAppli.SOFT_ENVS.restau.toString());
+		boolean isMarket = soft.equals(ContextAppli.SOFT_ENVS.market.toString());
+		boolean ispharma = soft.equals(ContextAppli.SOFT_ENVS.pharma.toString());
+		boolean isErp = soft.equals(ContextAppli.SOFT_ENVS.erp.toString());
+		boolean isSyndic = soft.equals(ContextAppli.SOFT_ENVS.syndic.toString());
+		boolean isAgri = soft.equals(ContextAppli.SOFT_ENVS.agri.toString());
+		
+		boolean isStock = (ispharma || isErp || isMarket || isRestau);
+		
+		if(isStock) {
+			requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+				"	('UNITE_STOCK', 'Unité d''achat et de vente', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                           "+
+				"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+				"		('KG', 'Kilogramme', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                           "+
+				"		('G', 'Gramme', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                "+
+				"		('L', 'Litre', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+				"		('ML', 'Millilitre', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                           "+
+				"		('B', 'Boite', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+				"		('P', 'Piéce', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                                 ";
+			                                                                                                                                                                         
+			requete += "	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+				"	('TYPE_PERTE', 'Type de perte', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                           "+
+				"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+				"		('1', 'Détérioration', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                         "+
+				"		('2', 'Perte', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+				"		('3', 'Vol', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                   "+
+				"		('PERIME', 'Péremption', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                       ";
+		}
+		                                                                                                                                                                              
+		requete += "	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TYPE_CONTRAT', 'Type de contrat de travail', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                            "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('1', 'CDD', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                   "+
+			"		('2', 'CDI', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                   "+
+			"		('3', 'Stage', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+			"		('4', 'Contrat ANAPEC', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                        ";
+			
+		requete += "	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TYPE_CONGE', 'Type de congé', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                           "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('1', 'Payé', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                  "+
+			"		('2', 'Sans solde', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                            ";
+		                                                                                                                                                                       
+		requete +="	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TYPE_INCIDENT', 'Type d''incident', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                     "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('1', 'Retard', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                "+
+			"		('2', 'Absence injustifiée', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                   ";
+		                                                                                                                                                                              
+		requete +="	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TYPE_PENALITE_INCIDENT', 'Type de pénalité d''incident', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('1', 'Retenue sur salaire', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                   "+
+			"		('2', 'Heures supplémentaires', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                ";
+		
+			requete +="	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+				"	('TYPE_REDUCTION', 'Type de réduction', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                   "+
+				"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+				"		('1', 'Réduction', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                             "+
+				"		('2', 'Offre spéciale', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                        "+
+				"		('3', 'Gratuit', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                               ";
+		
+		    requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TVA', 'Taux de TVA', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                                    "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('0', 'Exonéré', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                               "+
+			"		('7', '7 %', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                   "+
+			"		('10', '10 %', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+			"		('14', '14 %', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                                 "+
+			"		('20', '20 %', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                                 ";
+		                                                                                                                                                                              
+		    requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('TYPE_SORTIE', 'Type de sortie', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                         "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('1', 'Licenciement', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                          "+
+			"		('2', 'Départ volontaire', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                     "+
+			"		('3', 'Abondon de poste', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                      ";
+		                                                                                                                                                                              
+		    requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+			"	('FINANCEMENT', 'Type de financement', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                    "+
+			"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+			"		('CHEQUE', 'Chèque', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                           "+
+			"		('CHEQUE_F', 'Chèque fournisseur', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                             "+
+			"		('ESPECES', 'Espèces', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                         "+
+			"		('EFFET', 'Effet', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                             "+
+			"		('VIREMENT', 'Virement', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                       ";
+		 
+		   if(isStock) {
+			    requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+				"	('TYPE_INVENTAIRE', 'Type d''inventaire', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                 "+
+				"		INSERT INTO `val_type_enumere` (`code`, `libelle`, `type_enum_id`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                      "+
+				"		('JOURNALIER', 'Journalier', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                   "+
+				"		('HEBDOMADAIRE', 'Hebdomadaire', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                               "+
+				"		('MENSUEL', 'Mensuel', INSERTED_ID, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                         ";
+		   }
+		   
+		   if(!isSyndic) {
+			    requete +=	"	INSERT INTO `type_enumere` (`code`, `libelle`, `is_ajoutable`, `is_supprimable`, abonne_id, etablissement_id, societe_id, code_func) VALUES                            "+
+				"	('MARQUE_VEHICULE',  'Marque du véhicule', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                "+
+				"	('CATEGORIE_VEHICULE', 'Catégorie du véhicule', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                           "+
+				"	('CARBURANT', 'Carburant du véhicule', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                    "+
+				"	('ELEMENT_VIDANGE', 'Eléments de la maintenance du véhicule', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                             "+
+				"	('INCIDENT_AUTO',	'Type d''incident auto', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                              "+
+				"	('COMMENTAIRE_CAISSE', 'Commentaires commandes caisse', 1, 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                   ";
+		   }                                                                                                                                                                         
+		    
+		    requete +=	"	INSERT INTO `poste` (`description`, `code`, `intitule`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                                     "+
+		    	((ispharma || isMarket || isRestau)  ? "	(NULL, 'CAISSIER', 'Caissier', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	((ispharma || isMarket || isRestau || isErp)  ? "	(NULL, 'LIVREUR', 'Livreur', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	((isRestau)  ? "	(NULL, 'SERVEUR', 'Serveur', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	((ispharma || isMarket || isRestau || isErp)  ? "	(NULL, 'MANAGER', 'Manager', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	((isErp)  ? "	(NULL, 'SECRETAIRE', 'Secretaire', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	((isErp)  ? "	(NULL, 'COMPTABLE', 'Comptable', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "	")+
+		    	"	(NULL, 'GESTIONNAIRE', 'Gestionnaire', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),			"+
+		    	"	(NULL, 'SUPERVISEUR', 'Superviseur', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');			";
+	
+		    requete +=	"	INSERT INTO profile (libelle, code, is_backoffice, abonne_id, etablissement_id, societe_id, code_func) VALUES                                                          "+
+		    		"		('ADMINISTRATEUR', 'ADMIN', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),			"+
+		    		((isRestau)  ? "		('SERVEUR', 'SERVEUR', NULL, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		((ispharma || isMarket || isRestau || isErp)  ? "		('LIVREUR', 'LIVREUR', NULL, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		((ispharma || isMarket || isRestau || isErp)  ? "		('MANAGER', 'MANAGER', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		((isErp)  ? "		('SECRETAIRE', 'SECRETAIRE', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		((isErp)  ? "		('COMPTABLE', 'COMPTABLE', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		"		('SUPERVISEUR', 'SUPERVISEUR', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		"+
+		    		"		('GESTIONNAIRE', 'GESTIONNAIRE', 1, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		"+
+		    		((ispharma || isMarket || isRestau)  ? "		('CAISSIER', 'CAISSIER', NULL, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    		"		('CLIENT', 'CLIENT', NULL, "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');				";
+		    
+		    				    	
+				                                                                                                                                                                   
+			requete +=	"	INSERT INTO `user` (`password`, `employe_id`, `profile_id`, `login`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                        "+
+			"	('xxUSER_PWxx', NULL, INSERTED_ID, 'ADMIN', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),                                                                                     "+
+			"	('xxREMOTE_PWxx', NULL, INSERTED_ID, 'REMOTE_ADMIN', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                            ";
+		       
+			if(isStock) {
+			    requete +=	"	INSERT INTO `emplacement` (`titre`, abonne_id, etablissement_id, societe_id, code_func) VALUES                                                                         "+
+				"	('Stock pricipal', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                                                              ";
+			} 
+			if(ispharma || isMarket || isRestau) {
+			    requete +=	"	INSERT INTO `caisse` (`type_ecran`, `reference`, `emplacement_id`, `adresse_mac`, `date_creation`, abonne_id, etablissement_id, societe_id, code_func) VALUES          "+
+				"	('CAISSE', 'Caisse 1', INSERTED_ID, 'caisse1', '"+currDt+"', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');                                                                     ";
+			    
+			    if(isRestau) {
+			    	requete +=	"	INSERT INTO `menu_composition` (`b_left`, `b_right`, `code`, `date_maj`, `level`, `libelle`, `signature`, abonne_id, etablissement_id, societe_id, code_func) VALUES   "+
+						"	(0, 1, 'ROOT', '"+currDt+"', 0, 'List des menus', '-', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');	";
+			    }
+			}                                                                                                                                    
+		    requete +=	"	INSERT INTO `famille` (`type`, `b_left`, `b_right`, `code`, `date_maj`, `level`, `libelle`, `signature`, abonne_id, etablissement_id, societe_id, code_func) VALUES    "+
+		    	((isStock)  ? "		('ST', 0, 1, 'ROOT', '"+currDt+"', 0, 'Liste des familles', '-', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+		    	((isRestau)  ? "	('CU', 0, 1, 'ROOT', '"+currDt+"', 0, 'Liste des familles', '-', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC'),		" : "")+
+			"	('CO', 0, 1, 'ROOT', '"+currDt+"', 0, 'Liste des familles', '-', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');	";
+		                                                                                                                                                                              
+		    requete +=	"	INSERT INTO `ged` (`b_left`, `b_right`, `code`, `date_maj`, `level`, `libelle`, `signature`, abonne_id, etablissement_id, societe_id, code_func) VALUES                "+
+			"	(0, 1, 'ROOT', '"+currDt+"', 0, 'Liste des fichiers', '-', "+abonneId+", "+etsId+", "+societeId+", 'CD_FUNC');     ";
+		    
+		    return requete;
+	}
+	
+	private String getCodeFunc(EntityManager em, Class classE) {
+	    Object maxId = etsService.getSingleResult(em.createQuery("select max(id) from "+classE.getSimpleName()));
+	    maxId = (maxId == null ? 1 : maxId);
+	    
+		String codeFunc = maxId.toString()
+				+classE.getSimpleName().substring(0, 2)
+				+(""+System.currentTimeMillis()).substring(6);
+		return codeFunc;
+	}
+	
+	private Long executeInsert(EntityManager em, Statement st, String req) throws SQLException {
+		Long insertedId = null;
+		st.executeUpdate(req, Statement.RETURN_GENERATED_KEYS);
+		//
+		ResultSet rs = st.getGeneratedKeys();
+	    if (rs.next()) {
+	    	insertedId = rs.getLong(1);
+	    }
+	    rs.close();
+		
+	    return insertedId;
+	}
+	
+	private Connection getConnection(EntityManager entityManager){
+		SessionImpl sessionImpl = (SessionImpl)entityManager.getDelegate();
+		Connection connection = null;
+		try {
+			connection = sessionImpl.connection();
+			//connection.setAutoCommit(false);
+		} catch (Exception e1) {
+			throw new RuntimeException(e1);
+		};
+		
+		return connection;
+	}
+}

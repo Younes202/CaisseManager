@@ -1,0 +1,19 @@
+	var REQUIRED_MSG = "Le champ est obligatoire !";
+	var EMAIL_MSG = "L'email n'est pas valide.";
+	var DATE_MSG = "La date n'est valide.";
+	var NUMBER_MSG = "Le valeur doit \352tre num\351rique.";
+	var DIGITS_MSG = "Uniquement les chiffres sont autoris\351s";
+	var ALPHA = "La valeur doit \352tre alphab\351tique.";
+	var MAXLENGTH_MSG = "Ne pas saisir plus de {0} caract\350res.";
+	var MINLENGTH_MSG = "Saisir au minimum {0} caract\350res.";
+	var RANGELENGTH_MSG = "La valeur doit \352tre incluse entre {0} and {1} caract\350res.";
+	var RANGE_MSG = "La valeur doit \352tre entre {0} et {1}.";
+	var MAX_MSG = "La valeur ne pas \352tre sup\351rieure \340 {0}.";
+	var MIN_MSG = "La valeur ne pas \352tre inf\351rieure \340 {0}.";
+	var FIELD_MSG = "Des erreurs ont \u00E9t\u00E9 trouv\u00E9es dans le formulaire.";
+	var ERROR_TITLE = "Erreurs trouv\351es !"; 
+	
+	var GROWL_OPR_OK = "L'\u00E9l\u00E9ment \u00E0 \u00E9t\u00E9 mise \u00E0 jour avec succ\u00e8s.";
+	var GROWL_OPR_K0 = "Une erreur interne s'est produite";
+	var GROWL_TITLE_OK = "Mise \u00E0 jour effectu\u00E9e";
+	var GROWL_TITLE_K0 = "Erreur interne";

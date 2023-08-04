@@ -1,0 +1,774 @@
+package appli.model.domaine.dashboard.service.impl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.Query;
+
+import appli.controller.domaine.habilitation.bean.ProfileBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.persistant.EcriturePersistant;
+import appli.model.domaine.administration.persistant.EtatFinancePersistant;
+import appli.model.domaine.administration.persistant.NotificationPersistant;
+import appli.model.domaine.administration.service.ICompteBancaireService;
+import appli.model.domaine.administration.service.impl.ParametrageService;
+import appli.model.domaine.caisse.service.IJourneeService;
+import appli.model.domaine.compta.persistant.PaiementPersistant;
+import appli.model.domaine.dashboard.dao.IDashBoardDao;
+import appli.model.domaine.dashboard.service.IDashBoardAutoService;
+import appli.model.domaine.dashboard.service.IDashBoardService;
+import appli.model.domaine.stock.persistant.ArticleStockInfoPersistant;
+import appli.model.domaine.stock.persistant.FamillePersistant;
+import appli.model.domaine.stock.service.IFamilleService;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.controller.ControllerUtil;
+import framework.controller.FileUtilController;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+public class DashBoardService extends GenericJpaService<ProfileBean, Long> implements IDashBoardService {
+	@Inject
+	private IDashBoardDao dashBoardDao;
+	@Inject
+	private ICompteBancaireService compteBancaireService;
+	@Inject
+	private IJourneeService journeeService;
+	@Inject
+	private IFamilleService familleService;
+	@Inject
+	private IDashBoardAutoService dashBoardAutoService;
+	
+	public static final int _MONTHS = 12;
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getVentesMois() {
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(mtt_total_net) as montant, str(month(date_journee)) as mois, str(year(date_journee)) as annee "
+				+ "from JourneePersistant group by month(date_journee) order by month(date_journee) desc ")
+				.setMaxResults(12)
+				.getResultList();
+		
+		return listData;
+	}
+
+	// ------------------------------------------------Situation en chiffre-----------------------------------------------
+	/**
+	 * 
+	 */
+	@Override
+	public Map<String, Object> getDataInfos(Date dateFin) {
+		Map<String, Object> mapData = new HashMap<>();
+		// Salaires
+		BigDecimal mttSalaires = (BigDecimal) dashBoardDao.getSingleResult(getQuery(
+				"SELECT mtt_salaire from EtatFinancePersistant WHERE MONTH(date_etat)=MONTH(:currentDate)"
+						+ " AND YEAR(date_etat)=YEAR(:currentDate)")
+				.setParameter("currentDate", dateFin));
+		
+		// Employés actifs
+		Integer nbEmployesActifs = ((Long) dashBoardDao.getSingleResult(getQuery("SELECT COUNT(emp) FROM EmployePersistant emp "
+				+ " WHERE (emp.date_entree is null or emp.date_entree<=:currDate) and (emp.date_sortie is null or emp.date_sortie>:currDate)")
+				.setParameter("currDate", dateFin)
+			)).intValue();
+		
+		// Chèques non pointés
+		BigDecimal mttChequesNonPointes = (BigDecimal) getQuery("select sum(montant) from PaiementPersistant "
+					+ "where date_encaissement is null and opc_financement_enum.code=:financement "
+					+ "and date_mouvement<=:currDate")
+					.setParameter("currDate", dateFin)
+					.setParameter("financement", ContextAppli.MODE_PAIEMENT.CHEQUE.toString())
+					.getSingleResult();
+		
+		// Pertes par article
+		BigDecimal mttPertesArticle = BigDecimalUtil.get(""+getNativeQuery(
+				"select sum(montant_ttc) "
+					+ " from mouvement mvm "
+					+ " where mvm.type_mvmnt=:typeMvm"
+					+ " AND MONTH(mvm.date_mouvement)=MONTH(:currentDate)"
+					+ " AND YEAR(mvm.date_mouvement)=YEAR(:currentDate)")
+				.setParameter("typeMvm", ContextAppli.TYPE_MOUVEMENT_ENUM.p.toString())
+				.setParameter("currentDate", dateFin)
+				.getSingleResult());
+		
+			// Mtt achats
+			BigDecimal mttHTAchatArticles = BigDecimalUtil.get(""+getNativeQuery("SELECT "
+					+ " SUM(montant_ttc)"
+					+ " FROM mouvement mvm "
+					+ " WHERE mvm.type_mvmnt='a' "
+					+ " AND MONTH(mvm.date_mouvement)=MONTH(:currentDate)"
+					+ " AND YEAR(mvm.date_mouvement)=YEAR(:currentDate)"
+					)
+					.setParameter("currentDate", dateFin)
+					.getSingleResult());
+			
+			// Mtt ventes
+			BigDecimal mttVenteArticles = null;
+			//
+			if(!"erp".equals(StrimUtil.getGlobalConfigPropertie("context.soft"))){
+				
+				Calendar calFin = DateUtil.getCalendar(dateFin);
+				JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(DateUtil.stringToDate("01/"+(calFin.get(Calendar.MONTH)+1)+"/"+calFin.get(Calendar.YEAR)));
+		    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dateFin);
+		    	if(journeeFin == null){
+					journeeFin = journeeDebut;
+				}
+				if(journeeDebut != null){
+					mttVenteArticles = BigDecimalUtil.get(""+getQuery(
+							"SELECT SUM(mtt_commande_net) "
+							+ "FROM CaisseMouvementPersistant"
+						+ " WHERE opc_caisse_journee.opc_journee.id>=:jrnDebutId "
+						+ " and opc_caisse_journee.opc_journee.id<=:jrnFinId "
+						+ " and last_statut!='ANNUL'")
+						.setParameter("jrnDebutId", journeeDebut.getId())
+						.setParameter("jrnFinId", journeeFin.getId())
+						.getSingleResult());
+				}
+			} else{
+				mttVenteArticles = BigDecimalUtil.get(""+getNativeQuery("SELECT "
+						+ " SUM(montant_ttc)"
+						+ " FROM mouvement mvm "
+						+ " WHERE mvm.type_mvmnt='v' "
+						+ " AND MONTH(mvm.date_mouvement)=MONTH(:currentDate)"
+						+ " AND YEAR(mvm.date_mouvement)=YEAR(:currentDate)"
+						)
+						.setParameter("currentDate", dateFin)
+						.getSingleResult());
+			}
+
+		mapData.put("totalSalaire", mttSalaires);
+		mapData.put("employesActifs", nbEmployesActifs);
+		mapData.put("chequeNonPointes", mttChequesNonPointes);
+		mapData.put("pertesDeclares", mttPertesArticle);
+		mapData.put("totalAchat", mttHTAchatArticles);
+		mapData.put("totalVente", mttVenteArticles);
+		
+		return mapData;
+	}
+	
+	// -------------------------------------------------Pour le taux annuel de vente----------------------------------------------------------------------
+
+	/**
+	 * 
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getMttResultatNetParMois() {
+		List<Object[]> listResult = new ArrayList<>();
+		
+		String qr = "FROM EtatFinancePersistant order by date_etat desc";
+		
+		List<EtatFinancePersistant> listEtat = getQuery(qr)
+				.setMaxResults(12)
+				.getResultList();
+				
+		for(EtatFinancePersistant etat : listEtat) {
+			Calendar cal = DateUtil.getCalendar(etat.getDate_etat());
+			String monthYear = (cal.get(Calendar.MONTH)+1)+"-"+cal.get(Calendar.YEAR);
+			
+			listResult.add(new Object[] {etat.getMtt_resultat_net(), monthYear});
+		}
+		
+		return listResult;
+	}
+	
+	/**
+	 * 
+	 */
+//	@SuppressWarnings("unchecked")
+//	@Override
+//	public List<CaisseMouvementArticlePersistant> getMttVenteParArticles(Long familleId, Date dateDebut, Date dateFin) {
+//		Map<String, CaisseMouvementArticlePersistant> mapDetail = new HashMap<>();
+//		List<CaisseMouvementArticlePersistant> listCaisseArticle = null;
+//		//
+//		if(familleId == null || familleId.toString().equals("-999")) { 
+//			listCaisseArticle = getQuery("from CaisseMouvementArticlePersistant where is_menu is not null and is_menu=1 "
+//							+ "and opc_mouvement_caisse.date_vente >=:dateDebut and opc_mouvement_caisse.date_vente <=:dateFin")
+//					.setParameter("dateDebut", dateDebut)
+//					.setParameter("dateFin", dateFin)
+//					.getResultList();
+//		} else {
+//			Set<Long> familleIdsAll = new HashSet<Long>();
+//			List<FamillePersistant> familleAll = familleService.getFamilleEnfants("CU", familleId, true);
+//			for (FamillePersistant famillePersistant : familleAll) {
+//				familleIdsAll.add(famillePersistant.getId());
+//			}
+//			familleIdsAll.add(familleId);
+//			
+//			listCaisseArticle = getQuery("from CaisseMouvementArticlePersistant where (type_ligne = 'ART_MENU' or type_ligne = 'ART') "
+//							+ "and opc_article.opc_famille_cuisine.id in :familles "
+//							+ "and opc_mouvement_caisse.date_vente >=:dateDebut and opc_mouvement_caisse.date_vente <=:dateFin ")
+//					.setParameter("dateDebut", dateDebut)
+//					.setParameter("dateFin", dateFin)
+//					.setParameter("familles", familleIdsAll)
+//					.getResultList();
+//		}
+//		for (CaisseMouvementArticlePersistant caisseArtP : listCaisseArticle) {
+//			if(BooleanUtil.isTrue(caisseArtP.getIs_annule()) || BigDecimalUtil.isZero(caisseArtP.getMtt_total())){
+//				continue;
+//			}
+//			String code = caisseArtP.getCode();
+//			String libelle = caisseArtP.getLibelle();
+//			BigDecimal qte = BigDecimalUtil.get(1);
+//			BigDecimal mtt = caisseArtP.getMtt_total();
+//			
+//			CaisseMouvementArticlePersistant cvd = mapDetail.get(code);
+//			if(cvd == null){
+//				cvd = new CaisseMouvementArticlePersistant();
+//				cvd.setCode(code);
+//				cvd.setLibelle(libelle);
+//				mapDetail.put(caisseArtP.getCode(), cvd);
+//			}
+//			cvd.setQuantite(BigDecimalUtil.add(cvd.getQuantite(), qte));
+//			cvd.setMtt_total(BigDecimalUtil.add(cvd.getMtt_total(), mtt));
+//		}
+//		
+//		List<CaisseMouvementArticlePersistant> listMvm = new ArrayList<CaisseMouvementArticlePersistant>();
+//		for(String key : mapDetail.keySet()){
+//			listMvm.add(mapDetail.get(key));
+//		}
+//		
+//		Collections.sort(listMvm, new SortByQuantite());
+//		
+//		// On prend les 20 prmiers
+//		List<CaisseMouvementArticlePersistant> finalList = new ArrayList<CaisseMouvementArticlePersistant>();
+//		for(int i=0; i<(listMvm.size()>20?20:listMvm.size()); i++) {
+//			finalList.add(listMvm.get(i));
+//		}
+//		
+//		return finalList;
+//	}
+
+	@Override
+	public List<EcriturePersistant> getBanqueEvolution(Long compteId) {
+		Calendar cal = DateUtil.getCalendar(new Date());
+		int mt = cal.get(Calendar.MONTH)+1;
+		String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+		Date currDate = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		List<EcriturePersistant> listSolde = new ArrayList<>();
+		//
+		for(int i=0; i<12; i++) {
+			currDate = DateUtil.addSubstractDate(currDate, TIME_ENUM.MONTH, -i);
+			//
+			BigDecimal soldeCpt = compteBancaireService.getSoldeCompte(compteId, currDate);
+			
+			EcriturePersistant ecP = new EcriturePersistant();
+			ecP.setDate_mouvement(currDate);
+			ecP.setMontant(soldeCpt);
+			//
+			listSolde.add(ecP);
+		}
+		
+		// Solde actuel
+		EcriturePersistant ecP = new EcriturePersistant();
+		BigDecimal soldeCpt = compteBancaireService.getSoldeCompte(compteId, new Date());
+		ecP.setMontant(soldeCpt);
+		//
+		listSolde.add(ecP);
+		
+		return listSolde;
+	}
+	
+	public List<Object[]> getRepartitionFraisParType(Date dtDebut, Date dtFin,Long typeFraisId,Long employeId){
+		
+		String totalStat= "select SUM(montant), opc_frais.libelle "
+			        	+ "from FraisDetailPersistant "
+			        	+ "where date_depense>=:dateDebut and date_depense<=:dateFin ";
+		
+		if(StringUtil.isNotEmpty(typeFraisId)) {
+			totalStat += "and opc_type_frais.id=:typeFraisId ";
+		}
+		if(StringUtil.isNotEmpty(employeId)) {
+			totalStat += "and opc_frais.opc_employe.id=:employeId ";
+		}
+		totalStat +=  "group by opc_type_frais.id ";
+		
+		Query query = getQuery(totalStat)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+		
+		if(StringUtil.isNotEmpty(typeFraisId)) {
+			query.setParameter("typeFraisId", typeFraisId);
+		}
+		if(StringUtil.isNotEmpty(employeId)) {
+			query.setParameter("employeId", employeId);
+		}
+		
+		List<Object[]> listData = query.getResultList();
+		
+		return listData;
+		
+	}
+	
+public List<Object[]> getRepartitionFraisParEmploye(Date dtDebut, Date dtFin,Long typeFraisId,Long employeId){
+		
+		String totalStat= "select SUM(montant), opc_frais.opc_employe.nom "
+			        	+ "from FraisDetailPersistant "
+			        	+ "where date_depense>=:dateDebut and date_depense<=:dateFin ";
+		
+		if(StringUtil.isNotEmpty(typeFraisId)) {
+			totalStat += "and opc_type_frais.id=:typeFraisId ";
+		}
+		if(StringUtil.isNotEmpty(employeId)) {
+			totalStat += "and opc_frais.opc_employe.id=:employeId ";
+		}
+		totalStat +=  "group by opc_frais.opc_employe.id ";
+		
+		Query query = getQuery(totalStat)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+		
+		if(StringUtil.isNotEmpty(typeFraisId)) {
+			query.setParameter("typeFraisId", typeFraisId);
+		}
+		if(StringUtil.isNotEmpty(employeId)) {
+			query.setParameter("employeId", employeId);
+		}
+		
+		List<Object[]> listData = query.getResultList();
+		
+		return listData;
+		
+	}
+	
+	/**
+	 * 
+	 */
+	public List<Object[]> getRepartitionVentesParArticle(Date dtDebut, Date dtFin,Long familleIncludeId){
+		
+		Set<Long> familleIncludeIds = new HashSet<Long>();
+		if(familleIncludeId != null && !familleIncludeId.toString().equals("-999")) { 
+			List<FamillePersistant> familleAll = familleService.getFamilleEnfants("ST", familleIncludeId, false);
+			for (FamillePersistant famillePersistant : familleAll) {
+				familleIncludeIds.add(famillePersistant.getId());
+			}
+			familleIncludeIds.add(familleIncludeId);
+		}
+		
+		Query query = dashBoardDao.getQuery("select sum(prix_ttc) as montant, opc_article.libelle "
+				+ "from MouvementArticlePersistant "
+				+ "where opc_mouvement.type_mvmnt='v' "
+				+ "and opc_mouvement.date_mouvement>=:dateDebut and opc_mouvement.date_mouvement<=:dateFin "
+				+(familleIncludeIds.size() > 0 ? "and opc_article.opc_famille_stock.id in (:familleIncludeId) ":"")
+				+ "group by opc_article.id ");
+		
+		if(familleIncludeIds.size() > 0){
+			query.setParameter("familleIncludeId", familleIncludeIds);
+		}
+		
+		List<Object[]> listData = 
+				query.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin)
+				.getResultList();
+		
+		return listData;
+	}
+
+	/**
+	 * 
+	 */
+	public List<Object[]> getRepartitionVenteBOParPaiement(Date dtDebut, Date dtFin){
+		Query query = dashBoardDao.getQuery("select sum(mp.montant_ttc) as montant, pp.libelle "
+				+ "from PaiementPersistant pp inner join MouvementPersistant mp on pp.elementId=mp.id "
+				+ "where mp.type_mvmnt ='v' "
+				+ "and pp.source='VENTE' "
+				+ "and mp.date_mouvement>=:dateDebut and mp.date_mouvement<=:dateFin "
+				+ "group by pp.id");
+
+		List<Object[]> listData = 
+				query.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin)
+				.getResultList();
+		return listData;
+	}
+	
+	public Map<String, List<String>> getRepartiotionPaiementParModePaiement(Long banqueId){
+		//		1		2		3		4		5
+		// ESPECE
+		//  ['2012', '2013', '2014', '2015', '2016']
+		// CHEQUE
+		// ['2012', '2013', '2014', '2015', '2016']
+		
+		List<Object[]> listData = dashBoardDao.getQuery("select str(month(date_mouvement)) as mois, "
+				+ "opc_financement_enum.libelle, "
+				+ "sum(montant) as montant "
+				+ "from PaiementPersistant "
+				+ "where opc_compte_bancaire.id=:banqueId "
+				+ "group by opc_financement_enum.id, month(date_mouvement) "
+				+ "order by month(date_mouvement) desc ")
+				.setParameter("banqueId", banqueId)
+				.setMaxResults(12)
+				.getResultList();
+
+		Map<String, List<String>> mapData = new LinkedHashMap<>();
+		List<String> listMonth = new ArrayList<>();
+		List<String> listModesPaie = new ArrayList<>();
+		
+		// Collecter les mois
+		for (Object[] objects : listData) {
+			String month = ""+objects[0];
+			String modePaiement = (String) objects[1];
+			
+			if(!listMonth.contains(month)) {
+				listMonth.add(month);
+			}
+			if(!listModesPaie.contains(modePaiement)) {
+				listModesPaie.add(modePaiement);
+			}
+		}
+		
+		for(String monthRef : listMonth) {
+			boolean isPassed = false;
+			List<String> dataDet = null;
+			
+			for(String modPaieRef : listModesPaie) {
+				for (Object[] objects : listData) {
+					String month = ""+objects[0];
+					String modePaiement = (String) objects[1];
+					
+					if(!month.equals(monthRef)) {
+						continue;
+					}
+					if(!modePaiement.equals(modePaiement)) {
+						continue;
+					}
+					
+					String mtt = BigDecimalUtil.formatNumber((BigDecimal) objects[2]);
+					dataDet = mapData.get(modePaiement);
+					if(dataDet == null) {
+						dataDet = new ArrayList<>();
+						mapData.put(modePaiement, dataDet);
+					}
+					dataDet.add(mtt);
+					
+					isPassed = true;
+				}
+				//
+				if(!isPassed) {
+					if(dataDet == null) {
+						dataDet = new ArrayList<>();
+						mapData.put(modPaieRef, dataDet);
+					}
+					dataDet.add(BigDecimalUtil.formatNumber(BigDecimalUtil.ZERO));
+				}
+			}
+		}
+		mapData.put("listMonth", listMonth);
+		
+		return mapData;
+	}
+	@Override
+	public int getCurrentMonth() {
+		Calendar today = DateUtil.getCalendar(DateUtil.getCurrentDate());
+		return today.get(Calendar.MONTH);
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getEcartEmploye(Date dtDebut, Date dtFin) {
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dtDebut);
+    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dtFin);
+    	if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		if(journeeDebut == null){
+			return null;
+		}
+		String requete = "select "
+				+ "SUM( "
+				+ "case "
+				+ "when (cvv.mtt_cloture_caissier-cvv.mtt_total_net-cvv.mtt_ouverture) > 0 then (cvv.mtt_cloture_caissier-cvv.mtt_total_net-cvv.mtt_portefeuille-cvv.mtt_donne_point-cvv.mtt_ouverture) "
+				+ "else 0 "
+				+ "end ) as mtt_ecart_positif, "
+				
+				+ "SUM( "
+				+ "case "
+				+ "when (cvv.mtt_cloture_caissier-cvv.mtt_total_net-cvv.mtt_ouverture) < 0 then (cvv.mtt_cloture_caissier-cvv.mtt_total_net-cvv.mtt_portefeuille-cvv.mtt_donne_point-cvv.mtt_ouverture) "
+				+ "else 0 "
+				+ "end ) as mtt_ecart_negatif, "
+				
+				+ "us.login as user "+
+		"from caisse_journee cvv inner join journee jour on jour.id=cvv.journee_id "
+		+ "left join user us on us.id=cvv.user_id "+
+		"where jour.id>=:dateDebut and jour.id<=:dateFin "
+		+ "group by us.login";
+		
+		List<Object[]> listData = getNativeQuery(requete)
+				.setParameter("dateDebut", journeeDebut.getId())
+				.setParameter("dateFin", journeeFin.getId())
+				.getResultList();
+		
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getLivraisonParutilisateur(Date dtDebut, Date dtFin) {
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dtDebut);
+    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dtFin);
+    	if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		if(journeeDebut == null){
+			return null;
+		}
+		
+		String requete = "select "
+				+ "SUM(" + 
+				"	case " + 
+				"		when (mvm.type_commande='L' and mvm.last_statut!='ANNUL') then 1" + 
+				"		else 0" + 
+				"	end" + 
+				" ) as nbr_livraison," +
+				" user.login as user "+
+		"from caisse_mouvement mvm"
+		+ " inner join caisse_journee cj on cj.id=mvm.caisse_journee_id "
+		+ " inner join journee jr on jr.id=cj.journee_id " + 
+		"	left join user user on mvm.livreurU_id=user.id" +
+		"	where jr.id>=:dateDebut and jr.id<=:dateFin" + 
+		"	group by mvm.livreurU_id";
+		
+		List<Object[]> listData = getNativeQuery(requete)
+				.setParameter("dateDebut", journeeDebut.getId())
+				.setParameter("dateFin", journeeFin.getId())
+				.getResultList();
+		
+		return listData;
+	}
+
+	@Override
+	public Map<String, List<BigDecimal>> getDataChiffresEmploye(Date dtDebut, Date dtFin) {
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dtDebut);
+    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dtFin);
+    	if(journeeFin == null){
+			journeeFin = journeeDebut;
+		}
+		if(journeeDebut == null){
+			return null;
+		}
+		
+		// Ecart
+		String requete = "select "
+				+ "SUM(cvv.mtt_cloture_caissier), "
+				+ "SUM(cvv.mtt_cloture_caissier-cvv.mtt_total_net-cvv.mtt_portefeuille-cvv.mtt_donne_point-cvv.mtt_ouverture) as mtt_ecart, "
+				+ "SUM(cvv.mtt_annule), "
+				+ "SUM(cvv.mtt_annule_ligne), "
+				+ "us.login as user "+
+		"from caisse_journee cvv inner join journee jour on jour.id=cvv.journee_id "
+		+ "left join user us on us.id=cvv.user_id "+
+		"where jour.id>=:dateDebut and jour.id<=:dateFin "
+		+ "group by us.login";
+		
+		List<Object[]> listData = getNativeQuery(requete)
+				.setParameter("dateDebut", journeeDebut.getId())
+				.setParameter("dateFin", journeeFin.getId())
+				.getResultList();
+		
+		 Map<String, List<BigDecimal>> mapData = new HashMap<>();
+		for (Object[] objects : listData) {
+			if(BigDecimalUtil.isZero((BigDecimal) objects[0]) && BigDecimalUtil.isZero((BigDecimal) objects[1]) && BigDecimalUtil.isZero((BigDecimal) objects[2])){
+				continue;
+			}
+			
+			List<BigDecimal> listMtt = new ArrayList<>();
+			listMtt.add((BigDecimal) objects[0]);
+			listMtt.add((BigDecimal) objects[1]);
+			listMtt.add((BigDecimal) objects[2]);
+			listMtt.add((BigDecimal) objects[3]);
+			
+			mapData.put(""+objects[4], listMtt);
+		}
+		
+		return mapData;
+	}
+	
+	@Override
+	public List<Object[]> getTempsTravailEmploye(Date dtDebut, Date dtFin,Long employe , Long poste) {
+		String requete = "select "
+				+ "pr.opc_employe.nom, SUM(pr.duree_travail), SUM(pr.duree_ref-pr.duree_travail) "
+		+ "from PointageRecapPersistant pr "
+		+ "where pr.date_pointage>=:dateDebut and pr.date_pointage<=:dateFin ";
+		
+		if(StringUtil.isNotEmpty(poste)) {
+			requete += "and pr.opc_employe.opc_poste.id=:posteId ";
+		}
+		if(StringUtil.isNotEmpty(employe)) {
+			requete += "and pr.opc_employe.id=:employeId ";
+		}
+		requete +=  "group by pr.opc_employe.id";
+		
+		Query query = getQuery(requete)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+		
+		if(StringUtil.isNotEmpty(poste)) {
+			query.setParameter("posteId", poste);
+		}
+		if(StringUtil.isNotEmpty(employe)) {
+			query.setParameter("employeId", employe);
+		}
+		
+		List<Object[]> listData = query.getResultList();
+		
+		return listData;
+	}
+
+	@Override
+	public List<Object[]> getChiffreVenteCaisseParCaissier(Date dtDebut, Date dtFin) {
+		String requete = "select sum(mtt_commande_net) as montant, opc_user.login "
+				+ "from CaisseMouvementPersistant "
+		+ "where date_vente>=:dateDebut and date_vente<=:dateFin "
+		+ "and (is_annule is null or is_annule=0) "
+		+ "group by opc_user.id ";
+		
+		Query query = getQuery(requete)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+
+		List<Object[]> listData = query.getResultList();
+		
+		return listData;
+	}
+	
+	@Override
+	public List<Object[]> getChiffreVenteBOParCaissier(Date dtDebut, Date dtFin) {
+		String requete = "select sum(montant_ttc) as montant, opc_user.login "
+				+ "from MouvementPersistant where "
+				+ "type_mvmnt='v' "
+				+ "and (is_annule is null or is_annule=0) "			
+				+ "and date_mouvement>=:dateDebut and date_mouvement<=:dateFin "
+				+ "group by opc_user.id ";
+		
+		Query query = getQuery(requete)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+
+		List<Object[]> listData = query.getResultList();
+		
+		return listData;
+	}
+	
+	@Override
+	public List<Object[]> getRepVenteCaisseParCaissier(Date dtDebut, Date dtFin,Long user) {
+		String requete = "select "
+				+ "cmp.opc_user.login, "
+				+ "SUM(COALESCE(cmp.mtt_donne_point, 0)), "
+				+ "SUM(COALESCE(cmp.mtt_reduction, 0)), "
+				+ "Sum(COALESCE(cmp.mtt_art_offert,0)) "
+		+ "from CaisseMouvementPersistant cmp "
+		+ "where cmp.date_vente>=:dateDebut and cmp.date_vente<=:dateFin ";
+		
+		if(StringUtil.isNotEmpty(user)) {
+			requete += "and cmp.opc_user.id=:userId ";
+		}
+		requete +=  "group by cmp.opc_user.login ";
+		requete +=  "order by cmp.opc_user.login";
+		
+		Query query = getQuery(requete)
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin);
+		
+		if(StringUtil.isNotEmpty(user)) {
+			query.setParameter("userId", user);
+		}
+		
+		List<Object[]> listData = query.getResultList();
+		return listData;
+	}
+	
+	@Override
+	public List<Object[]> getCongeNonPayeByDate(Date dateDebut, Date dateFin) {
+		return getQuery("select sum(duree) , concat(opc_employe.nom,' ',opc_employe.prenom) "
+				+ "from PointagePersistant where type='cg' and text_1='NP' "
+				+ "and date_event>=:dateDebut and date_event<=:dateFin "
+				+ "group by opc_employe.id")
+				.setParameter("dateDebut", dateDebut)
+				.setParameter("dateFin", dateFin)
+				.getResultList();
+	}
+	
+	@Override
+	public List<Object[]> getPointageRH(Date dateDebut, Date dateFin) {
+		return getQuery("select opc_employe.id, concat(opc_employe.nom,' ',opc_employe.prenom), "
+				+ "SUM(case when (text_1='R') then 1 else 0 end ) as nbr_retenue, "
+				+ "SUM(case when (text_1='B') then 1 else 0 end ) as nbr_blame, "
+				+ "SUM(case when (text_1='A') then 1 else 0 end ) as nbr_autre "
+				+ "  from PointagePersistant where type='ds' "
+				+ "and date_event>=:dateDebut and date_event<=:dateFin "
+				+ "group by opc_employe.id")
+				.setParameter("dateDebut", dateDebut)
+				.setParameter("dateFin", dateFin)
+				.getResultList();
+	}
+
+	@Override
+	public Map<String, Integer> getMapNbrAlerte(){
+		Map<String, Integer> mapAlert = new HashMap<>();
+		//
+		mapAlert.put("nbr_alertAuto", dashBoardAutoService.getAssuranceProche().size()+ 
+				+ dashBoardAutoService.getVignetteProche().size()+
+				+ dashBoardAutoService.getVisiteTechniqueProche().size()+
+				+ dashBoardAutoService.getVidangeProche().size()+
+				+ dashBoardAutoService.getListIncidents().size()+
+				+ dashBoardAutoService.getConsommation().size()
+				);
+		// 
+		// Article en alerte
+		String req = "from ArticleStockInfoPersistant articleStockInfo " + 
+				"where (articleStockInfo.opc_article.is_disable is null or articleStockInfo.opc_article.is_disable=0) " + 
+				"and (COALESCE(articleStockInfo.qte_reel, 0) < COALESCE(articleStockInfo.opc_emplacement_seuil.qte_seuil, 0)) "; 
+		List<ArticleStockInfoPersistant> listData = getQuery(req).getResultList();				
+		
+		mapAlert.put("nbr_alertStock", listData.size());
+		
+		//
+		req = "from PaiementPersistant paiement where paiement.date_echeance is not null "
+				+ "and paiement.date_encaissement is null "
+				+ "and paiement.date_echeance < :dateRef";
+		List<PaiementPersistant> listEcheanceAll = (List<PaiementPersistant>) getQuery(req)
+				.setParameter("dateRef", DateUtil.addSubstractDate(new Date(), TIME_ENUM.DAY, 30)).
+					getResultList();
+		mapAlert.put("nbr_alertCompta", listEcheanceAll.size());
+		
+		mapAlert.put("nbr_alertRH", 0);
+		
+		return mapAlert;
+	}
+	
+	private List<NotificationPersistant> getListNotifications() {
+		String retour = null;
+		String cloudUrl = StrimUtil.getGlobalConfigPropertie("caisse.cloud.url");
+		EtablissementPersistant etsB = ContextAppli.getEtablissementBean();
+		String codeAuth = ParametrageService.getDycCodeAuth(etsB, etsB.getCode_authentification());
+		
+		List<NotificationPersistant> listNotif = new ArrayList<>();
+		try {
+			if(StringUtil.isNotEmpty(cloudUrl)){
+				retour = FileUtilController.callURL(cloudUrl+"/admin?tp=notif&org="+codeAuth);
+				if(StringUtil.isNotEmpty(retour)){
+					listNotif = ControllerUtil.getObjectFromJson(retour, NotificationPersistant.class);
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		return listNotif;
+	}
+
+}
+

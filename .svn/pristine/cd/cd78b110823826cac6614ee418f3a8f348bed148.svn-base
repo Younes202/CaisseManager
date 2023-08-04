@@ -1,0 +1,22 @@
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<%
+String mnu = (String)ControllerUtil.getMenuAttribute("curMnu", request);
+%>
+
+<div class="tabbable">
+	<ul class="nav nav-tabs" id="myTab">
+	<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_CLIENT"))){ %> 
+		<li <%="cli".equals(mnu)?" class='active'":"" %>><a params="curMnu=cli" targetDiv="right-div" data-toggle="tab" href="#descripton" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.init_situation")%>"> CLIENT </a></li>
+	<%} %>
+	<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_SOC_LIVR"))){%>
+		<li <%="socLivr".equals(mnu)?" class='active'":"" %>><a params="curMnu=socLivr" targetDiv="right-div" data-toggle="tab" href="#mouvement" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.init_situation")%>"> SOCIÉTÉ LIVRAISON </a></li>
+	<%} %>	
+	<%if(StringUtil.isTrueOrNull(ContextGloabalAppli.getGlobalConfig("RIGHT_SITUATION_LIVREUR"))){%>
+		<li <%="livr".equals(mnu)?" class='active'":"" %>><a params="curMnu=livr" targetDiv="right-div" data-toggle="tab" href="#mouvement" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.init_situation")%>"> LIVREUR </a></li>
+	<%} %>	
+	</ul>
+</div>

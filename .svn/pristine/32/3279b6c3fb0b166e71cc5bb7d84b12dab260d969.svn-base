@@ -1,0 +1,574 @@
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.STATUT_JOURNEE"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="appli.controller.domaine.caisse_restau.action.CaisseWebAction"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="java.util.Map"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.EmployePersistant"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<!DOCTYPE html>
+<html lang="fr-fr" style="overflow: hidden;">	
+<%
+		// Purge
+	ControllerUtil.cleanAll(request);
+
+	boolean isCaisseVerouille = ControllerUtil.getMenuAttribute("IS_CAISSE_VERROUILLE", request) != null;
+	boolean isCaisseNotFermee = (ContextAppliCaisse.getJourneeCaisseBean() != null && ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse().equals("O"));
+	boolean isJourneeCaisseOuverte = !isCaisseVerouille && isCaisseNotFermee;	
+	boolean isJourneeOuverte = (ContextAppliCaisse.getJourneeBean() != null && ContextAppliCaisse.getJourneeBean().getStatut_journee().equals("O"));
+	boolean isServeur = "SERVEUR".equals(ContextAppli.getUserBean().getOpc_profile().getCode());
+	boolean isManager = ContextAppli.getUserBean().isInProfile("MANAGER");
+	boolean isAdmin = ContextAppli.getUserBean().isInProfile("ADMIN");
+	boolean isCaissier = ContextAppli.getUserBean().isInProfile("CAISSIER");
+	boolean isConfirmOffre = (!isManager && !isAdmin && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SECURE_REDUCTION_CMD")));
+	boolean isSatCuisine = ContextGloabalAppli.getAbonementBean().isSatCuisine();
+	%>	
+	
+<!-- Head -->	
+	<head>
+		<title>Gestion de la caisse automatique</title>
+		<jsp:include page="/WEB-INF/fragment/header-resources.jsp"></jsp:include>
+		
+		<link rel="stylesheet" type="text/css" href="resources/caisse/css/caisse.css?v=<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>15">
+		 <link href="resources/framework/js/contextmenu/jquery.contextMenu.min.css" rel="stylesheet" type="text/css" />
+		 <script src="resources/framework/js/contextmenu/jquery.contextMenu.min.js" type="text/javascript"></script>
+	 	<script src="resources/framework/js/contextmenu/jquery.ui.position.min.js" type="text/javascript"></script>
+	
+		<style type="text/css">
+			.context-menu-root .del {
+				color: red;
+			}
+			.context-menu-root .off {
+				color: green;
+			}
+			.context-menu-root .com{
+				color: blue;
+			}
+			
+			.context-menu-root .suite{
+				color: #9c27b0;
+			}
+			.context-menu-root .ann-suite{
+				color: #ea8b00;
+			}
+			
+			.context-menu-active{
+				background-color: yellow;
+			}
+			.btn.btn-circle.btn-lg {
+				width: 45px;
+				height: 45px;	
+			}
+			#banner_foot_act img{
+				width: 25px;
+			}
+		</style>
+		
+	<script type="text/javascript">
+	var interval_tracker_id = 0;
+	function stopSuiviTimer(){
+		// Clear timer
+		for (var i = 1; i < (interval_tracker_id+10); i++){
+	        window.clearInterval(i);
+		}
+	}
+		function managerFooterBanner(){
+			$("#back_btn, #up_btn").hide();
+		}
+		
+		function managerInitCaisseTmp(){
+			if ($.active > 0) {
+				setTimeout(function(){
+					managerInitCaisseTmp();
+				}, 1000);
+				return;
+			}
+			if($("#top_msg_banner_det span").length==0){
+				$("button[id^='close_modal']").each(function(){
+					$(this).trigger('click');
+					$(".modal-backdrop").hide();
+				});
+				managerFooterBanner();
+			}
+		}
+		
+		function managerInitCaisse(isImmediat){
+			if(isImmediat){
+				managerInitCaisseTmp();
+			} else{
+				setTimeout(function(){
+					managerInitCaisseTmp();
+				}, 1000);
+			}
+		}
+	
+		function manageItemTr(trParam, key){
+			var tp = trParam.substring(trParam.indexOf("tp=")+3);
+			var isdbS = trParam.indexOf("isDb=") != -1;
+			//
+        	if(key == 'selCli'){
+				$("#targ_link").attr("targetDiv", "left-div");
+				$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.selectGroupe")%>').attr("params", trParam).trigger("click");
+			} else if(key == 'selTab'){
+				$("#targ_link").attr("targetDiv", "left-div");
+				$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.selectTable")%>').attr("params", trParam).trigger("click");
+			} else if(key == 'annTab'){
+				$("#targ_link").attr("targetDiv", "left-div");
+				$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>').attr("params", trParam).trigger("click");
+			} else if(key == 'couvTab'){
+				$("#targ_link").attr("targetDiv", "left-div");
+				$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.manageCouverts")%>').attr("params", trParam).trigger("click");
+			} else if(key == 'selMenu'){
+				$("#targ_link").attr("targetDiv", "right-div");
+				$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.selectLigneMenu")%>').attr("params", trParam).trigger("click");
+			} else if(key == 'dupMenu'){
+				$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initDupMnu")%>').attr("params", trParam).trigger("click");
+			} else if(tp == 'TAB' && key == 'del'){
+				if($("#is_confirm_mngr").val() == '1'){
+        			$("#del-cmd-lnk").attr("params", "tpact=delrow&trParam="+trParam.replace(/\&/g,"**")).trigger("click");// Remplacer les & pour les traiter dans la popup confirmation
+        		} else{
+					$("#targ_link").attr("targetDiv", "left-div");
+        			var eventBack = trParam.indexOf("tp=MENU") == -1 ? null : '$("#home_lnk").trigger("click")';
+					showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.supprimerTable")%>', trParam, $("#targ_link"), "Cette ligne sera supprim&eacute;e.<br>Voulez-vous confirmer ?", eventBack, "Suppression ligne");
+        		}
+        	} else if(tp == 'CLI' && key == 'del'){
+        		if($("#is_confirm_mngr").val() == '1'){
+        			$("#del-cmd-lnk").attr("params", "tpact=delrow&trParam="+trParam.replace(/\&/g,"**")).trigger("click");// Remplacer les & pour les traiter dans la popup confirmation
+        		} else{
+        			$("#targ_link").attr("targetDiv", "left-div");
+        			var eventBack = trParam.indexOf("tp=MENU") == -1 ? null : '$("#home_lnk").trigger("click")';
+					showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.supprimerClient")%>', trParam, $("#targ_link"), "Cette ligne sera supprim&eacute;e.<br>Voulez-vous confirmer ?", eventBack, "Suppression ligne");
+        		}
+        	} else if(key == 'suite'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.suiteCommande")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'annSuite'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.suiteCommandeAnnule")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'del'){
+				if($("#is_confirm_mngr").val() == '1' && isdbS){
+        			$("#del-cmd-lnk").attr("params", "tpact=delrow&trParam="+trParam.replace(/\&/g,"**")).trigger("click");// Remplacer les & pour les traiter dans la popup confirmation
+        		} else{
+        			$("#targ_link").attr("targetDiv", "left-div");
+    				var eventBack = trParam.indexOf("tp=MENU") == -1 ? null : '$("#home_lnk").trigger("click")';
+    				showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.deleteRow")%>', trParam, $("#targ_link"), "Cette ligne sera supprim&eacute;e.<br>Voulez-vous confirmer ?", eventBack, "Suppression ligne");	
+        		}
+        	} else if(key == 'enc'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initPaiement")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'annEnc'){ 
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.annulerEncaissement")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'com'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initCommentaireCommande")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'qte'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.changeQuantite")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'off'){
+        		<%if(isConfirmOffre){%>
+    				$("#del-cmd-lnk").attr("params", "tpact=offrir&trParam="+trParam.replace(/\&/g,"**")).trigger("click");
+    			<%} else{%>
+        			$("#targ_link").attr("targetDiv", "left-div");
+        			$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.offrirLigneCommande")%>').attr("params", trParam).trigger("click");
+        		<%} %>
+        	} else if(key == 'annOff'){
+        		$("#targ_link").attr("targetDiv", "left-div");
+        		$("#targ_link").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.offrirLigneCommande")%>').attr("params", trParam).trigger("click");
+        	} else if(key == 'trans'){
+        		if(tp == 'CLI'){
+        			$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initPlan")%>').attr("params", trParam).trigger("click");
+        		} else {
+        			$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initTransfertArtMnu")%>').attr("params", trParam).trigger("click");
+        		}
+        	} else if(key == 'chngTab'){
+        		$("#targ_link_pop").attr("wact", '<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initPlan")%>').attr("params", trParam).trigger("click");
+        	}
+		}
+		
+		function manageZoom(val){
+			$("html").css("zoom", val).css("-moz-transform", "scale("+val+")").css("-moz-transform-origin", "0.0");
+		}
+		
+		$(document).ready(function (){
+			navigator.vibrate(1000);  // this will vibrate for 1 second
+			
+			
+			refreshSize();
+			
+			$("#zoom_slct").change(function(){
+				//$.cookie('zoom_cai_cock', $(this).val(), { expires: 1000 });
+				writeLocalStorage('zoom_cai_cock', $(this).val());
+				refreshSize();
+			});
+			
+			$.contextMenu({
+		        selector: '#cmd-table tr[par]', 
+		        trigger: 'left',
+		        build: function($trigger, e) {
+		        	
+		        	if($trigger.find("a").length > 0){
+			        	var position = $trigger.find("a").offset();
+			        	
+			        	if(e.pageX <= 45){
+			        		return;
+			        	}
+		        	}
+		        	
+		        	var isMttInLine = $trigger.attr("par").indexOf("isart=1") != -1;
+		        	var isRoot = $trigger.attr("par").indexOf("isroot=1") != -1;
+		        	$("#cmd-table tr[sel]").each(function(){
+		        		if(!$(this).attr("par") || ($(this).attr("par").indexOf("istab=1")== -1 && $(this).attr("par").indexOf("iscli=1")== -1)){
+		        			$(this).removeAttr("sel").css("background-color", "");	
+		        		}
+		        	});
+		        	
+		        	var tp = $trigger.attr("par").substring($trigger.attr("par").indexOf("tp=")+3);
+		        	if(tp.indexOf("&") != -1){
+		        		tp = tp.substring(0, tp.indexOf("&"));
+		        	}
+		        	
+		        	if(tp == 'LIVRAISON' || tp == 'GARANTIE'){
+		        		setTimeout(() => {
+		        			$(".context-menu-root").remove();	
+						}, 1000);
+		        		
+		        		return;
+		        	}
+		        	
+		        	$("#cmd-table tr[sel]").each(function(){
+		        		if(!$trigger.attr("par") || ($trigger.attr("par").indexOf("istab=1")== -1 && $trigger.attr("par").indexOf("iscli=1")== -1)){
+		        			$trigger.attr("sel", "1").css("background-color", "#94e0fd");	
+		        		}
+		        	});
+		        	
+		        	var mnuItems = "";
+		        	
+		        	if(tp == 'CLI'){
+		        		mnuItems = mnuItems + '<hr> <command label="S&eacute;l&eacute;ctionner ce client" icon="fa-male" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'selCli\');">';
+		        	} else if(tp == 'TAB' ){
+		        		mnuItems = mnuItems + '<hr> <command label="S&eacute;l&eacute;ctionner cette table" icon="fa-cutlery" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'selTab\');">';
+		        	} else if(tp == 'MENU' && $trigger.attr("class").indexOf("mnu_")!=-1){
+		        		mnuItems = mnuItems + '<hr> <command label="S&eacute;l&eacute;ctionner ce menu" icon="fa-cutlery" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'selMenu\');">';
+		        		mnuItems = mnuItems + '<hr> <command label="Dupliquer ce menu" icon="fa-copy" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'dupMenu\');">';
+		        	}
+		        <%if(!isServeur || isCaissier || isManager || isAdmin){%>
+		        	if(!isRoot && ((isMttInLine && $trigger.attr("par").indexOf("mnu=null")!=-1) || tp == 'MENU' || tp == 'CLI' || tp == 'TAB')){
+			        	if($trigger.find("i[isenc]").length == 0){
+			        		mnuItems = mnuItems + '<hr> <command label="Encaisser" icon="fa-money enc" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'enc\');">';
+			        	} else{
+			        		mnuItems = mnuItems + '<hr> <command label="Annuler encaissement" icon="fa-money annul-enc" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'annEnc\');">';	
+			        	}
+		        	}
+		        <%}%>
+		        <%if(StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CAISSE_OFFRE")) && (!isServeur || isCaissier || isManager || isAdmin)){%>
+		        	if(tp != 'TAB' && tp != 'CLI'){
+			        	if($trigger.find("i[isoff]").length == 0){
+			        		if(isMttInLine){
+			        			mnuItems = mnuItems + '<hr> <command label="Offrir cet &eacute;l&eacute;ment" icon="fa-gift off" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'off\');">';
+			        		}
+			        	} else{
+			        		mnuItems = mnuItems + '<hr> <command label="Annuler offre" icon="fa-gift annul-off" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'annOff\');">';
+			        	}
+		        	}
+		        <%}%>
+		        	if(!isRoot && (tp == 'MENU' || (isMttInLine && $trigger.attr("par").indexOf("mnu=null")!=-1) || tp == 'CLI')){
+		        		mnuItems = mnuItems + '<hr> <command label="Transf&eacute;rer" icon="fa-mail-forward trans" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'trans\');">';
+		        	} 
+		        	if(tp == 'TAB'){
+		        		mnuItems = mnuItems + '<hr> <command label="Annuler table" icon="fa-power-off annul-tab" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'annTab\');">';
+		        		mnuItems = mnuItems + '<hr> <command label="Nombre de couverts" icon="fa-paw couvert-tab" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'couvTab\');">';
+		        		mnuItems = mnuItems + '<hr> <command label="Changer la table" icon="fa-mail-forward chng-tab" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'chngTab\');">';
+		        	}
+		        	
+		        	if(isMttInLine || tp == 'ART_MENU'){
+		        		
+		        		mnuItems = mnuItems + '<hr> <command label="Commenter" icon="fa-comment-o com" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'com\');">';
+		        		
+		        		if(isMttInLine 
+		        				&& !isRoot 
+		        				&& tp != 'MENU' 
+		        				&& $trigger.attr("par").indexOf("mnu=null")!=-1){
+		        			
+		        			mnuItems = mnuItems + '<hr> <command label="Quantit&eacute;" icon="fa-sort-numeric-asc qte" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'qte\');">';
+		        		}
+		        	}
+		        	
+		        	<%if(isSatCuisine){%>
+			        	if($trigger.find("i[issuiteend]").length == 0){
+			        		if($trigger.find("i[issuite]").length == 0){
+			        			mnuItems = mnuItems + '<hr>  <command label="Suite commande" icon="fa fa-clock-o suite" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'suite\');">';
+			        		} else{
+			        			mnuItems = mnuItems + '<hr>  <command label="Lancer la suite" icon="fa fa-clock-o ann-suite" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'annSuite\');">';
+			        		}
+			        	}
+		        	<%}%>
+		        	
+		        	if(!isRoot){
+	        			mnuItems = mnuItems + '<hr>  <command label="Supprimer" icon="fa-times del" onclick="manageItemTr(\''+$trigger.attr("par")+'\', \'del\');">';
+		        	}
+		        	
+		        	$('#html5menu').html(mnuItems);
+			
+		        	return {
+				        items: $.contextMenu.fromMenu($('#html5menu'))
+		        	};
+		           }
+			    });
+			
+			<%-- Plein �cran de la partie droite --%>
+			$("#toogle-detail").click(function(){
+				if($("#right-div").attr("disp") != 'full'){
+					$("#right-div").attr("disp", 'full');
+					$("#left-div").css("display", "none");
+					$("#right-div")
+						.css("position", "fixed")
+						.css("width", "100%")
+						.css("height", ($(window).height()+70)+"px")
+				    	.css("top", "40px")
+				    	.css("left", "0px");
+				} else{
+					$("#right-div").removeAttr("disp");
+					$("#right-div").css("position", "relative").css("top", "0px");
+					$("#left-div").css("display", "");
+					refreshSize();
+				}
+			});
+			<%-- Confirmer la deconnexion --%>
+			$("#delog_lnk").click(function(){
+				showConfirmDeleteBox('<%=EncryptionUtil.encrypt("commun.login.disconnect")%>', null, $("#targ_link"), "Vous &ecirc;tes sur le point de vous d&eacute;connecter.<br>La commande en cours sera <b>perdue</b>. Voulez-vous confirmer ?", null, "Quitter la caisse");
+			});
+			$("#lock_lnk").click(function(){
+				showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.verrouillerCaisse")%>', null, $("#targ_link"), "Vous &ecirc;tes sur le point de verouiller cette caisse.<br>Voulez-vous confirmer ?", null, "Verouillage de la caisse");
+			});
+			
+			// Gestion mise en veille -------------------------------
+			<%String imgBack = null;
+			IArticleService service = (IArticleService)ServiceUtil.getBusinessBean(IArticleService.class);
+			Map<String, byte[]> dataimg = service.getDataImage(ContextAppli.getEtablissementBean().getId(), "paramFE");
+			if(dataimg.size() > 0){
+				imgBack = "data:image/jpeg;base64,"+FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue());%>
+				// Tempo pour effacer l'�cran
+				var timer = startLockTimeOut();
+				// Mise en veille de l'�cran --------------------------------------------------------
+				$(document).ajaxComplete(function(e){
+					timer = startLockTimeOut(timer);
+				});
+				//
+				$(document).off('click', '#lock_caisse_div');
+				$(document).on('click', '#lock_caisse_div', function(e){
+					$("#lock_caisse_div").hide(1000);
+					timer = startLockTimeOut(timer);
+				});
+			<%}%>
+	// ----------------------------------------------------------------
+			<%-- Code barre --%>
+			var barcode="";
+		    $(document).keydown(function(e) {
+		    	<%-- Ne pas d�clencher si popup authentification ouverte --%>
+		    	if($("#generic_modal").length == 1 && ($("#generic_modal").css("display") != "none")){
+		    		return;
+		    	}
+		        var code = (e.keyCode ? e.keyCode : e.which);
+		        var sourceEvent = $(e.target).prop('nodeName');
+		        var isInput = (sourceEvent == 'INPUT') ? true : false;
+		        //
+		        if(!isInput && code==13 && $.trim(barcode) != ''){
+		        	if($.trim(barcode).length > 5){
+		        		e.preventDefault();
+			        	$("#targ_link").attr("targetDiv", "left-div");
+			        	submitAjaxForm('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.manageLecteursCarteBarre")%>', 'cb='+barcode, $("#data-form"), $("#targ_link"));
+		        	}
+		            barcode="";
+		        } else{
+		  			 barcode = barcode + String.fromCharCode(code);
+		        }
+		    });
+			
+		    $(document).on('click', 'a[id="del_cli_lnk"]', function(){
+		    	$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), $(this).attr("params"), $("#targ_link"), "Ce client ainsi que ses articles seront supprim&eacute;s.<br>Voulez-vous confirmer ?", null, "Suppression client");
+		    });
+		    $(document).on('click', 'a[id="del_tab_lnk"]', function(){
+		    	$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), $(this).attr("params"), $("#targ_link"), "Cette table ainsi que ses articles et ses clients seront supprim&eacute;s.<br>Voulez-vous confirmer ?", null, "Suppression client");
+		    });
+			
+			$(document).on('click', '#annul_cmd_main', function(){
+				$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), "tp=annul", $("#targ_link"), "Cette commande sera annul&eacute;e.<br>Voulez-vous confirmer ?", "managerInitCaisse(true);$('#main_menu_tab').trigger('click');", "Annulation commande");
+			});
+			
+		    
+		    <%-- Plein &eacute;cran et resize --%>
+			$("#fullscreen-toggler").click(function(){
+				setTimeout(function(){
+					refreshSize();
+				}, 1000);
+			});
+
+			var doit;
+			window.onresize = function(){
+			  clearTimeout(doit);
+			  doit = setTimeout(refreshSize, 100);
+			};
+		});
+		
+		function startLockTimeOut(timer){
+			window.clearTimeout(timer);
+			timer = window.setTimeout(function(){
+				$("#lock_caisse_div").show(1000);
+			}, 90000);
+			return timer;
+		}
+		
+		function getWindowRatioZoom(){
+			var ratioW = 1;
+			var ratioH = 1;
+			var dataZoom = readLocalStorage('zoom_cai_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				if(dataZoom == '0.9'){
+					ratioW = 9;
+					ratioH = 9;
+				} else if(dataZoom == '0.85'){
+					ratioW = 5.6;
+					ratioH = 5.6;
+				} else if(dataZoom == '0.8'){
+					ratioW = 4;
+					ratioH = 4;
+				} else if(dataZoom == '0.75'){
+					ratioW = 3;
+					ratioH = 3;
+				} else if(dataZoom == '0.7'){
+					ratioW = 2.35;
+					ratioH = 2.35;
+				} else if(dataZoom == '0.6'){
+					ratioW = 1.5;
+					ratioH = 1.5;
+				} else if(dataZoom == '0.5'){
+					ratioW = 1;
+					ratioH = 1;
+				}
+			}
+			var ratioArray = [ratioW, ratioH];
+			
+			return ratioArray;
+		}
+		
+		function refreshSize(){
+			var dataZoom = readLocalStorage('zoom_cai_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				var ratioArray = getWindowRatioZoom();
+				$("#zoom_slct").val(dataZoom);
+			} else{
+				dataZoom = 0.9;
+			}
+			// Css
+			manageZoom(dataZoom);
+			
+			var widowHeight = $(window).height();
+			var widowWidth = $(window).width();
+			// Right bloc
+			$("#tab_det_fam").css("height", (widowHeight-140)+"px");
+			$("#tab_det_fam").css("width", (widowWidth+40)+"px");
+			// Commande bloc
+			$("#left-div").css("height", (widowHeight-80)+"px");
+			$("#right-div").css("height", (widowHeight-80)+"px");
+		}
+		</script>		
+	</head>
+<!-- /Head -->
+
+<!-- Body -->
+<body>
+
+<menu id="html5menu" style="display:none" class="showcase">
+  	
+</menu>
+
+<%
+	if(dataimg.size() > 0){
+%>
+	<div id="lock_caisse_div" style="opacity:0.9;z-index:10000;position: absolute;left: 0;top: 0;width: 100%;height: 100%;background-color: #ccc;display: none;">
+		<div style="position: absolute;right: 13px;top: 90%;width:100%;text-align: right;">
+			<img alt="Caisse manager" src="resources/<%=StrimUtil.getGlobalConfigPropertie("context.soft") %>/img/logo_caisse_red.png?v=1.7" style="height: 40px;"/>
+		</div>
+		<div style="position: absolute;height: 100%;width: 100%;text-align: center;">
+              <img src="data:image/jpeg;base64,<%=FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue())%>" alt="Caisse manager" style="width: 350px;margin-top:20%" />                     
+       </div>
+	</div>
+<%
+	}
+%>
+	<input type="hidden" id="is_confirm_mngr"><%-- Confirm suppression lig,e commande. Alimenté depuis le détail --%>
+	<a href="javascript:" id="targ_link" targetDiv="left-div"></a>
+	<a href="javascript:" id="targ_link_pop" targetdiv="generic_modal_body" data-toggle="modal" data-target="#generic_modal"></a>
+	<std:linkPopup action="caisse-web.caisseWeb.loadConfirmAnnule" id="del-cmd-lnk" style="display:none;" /> 
+
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+			
+    <!-- Main Container -->
+    <div class="main-container container-fluid">
+        <!-- Page Container -->
+        <div class="page-container">
+			<jsp:include page="/domaine/caisse/normal/fragment/mnu_top_caisse_mobile.jsp" />
+			
+			<div class="page-body" style="position:fixed; margin: 0px;padding: 0px;margin-top: 50px !important;    width: 100%;">
+				<div class="widget">
+				<std:form name="data-form">
+					<input type="hidden" name="qte_calc" id="qte_calc">
+					
+			         <div class="widget-body" style="padding: 1px;">
+			         	<!-- Parie gauche -->
+			         	<div style="position:fixed;width:100%;display:none;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_LEFT", null)%>;z-index:99;" id="left-div">
+			         		<!-- D&eacute;tail articles -->
+			         		<%if(isJourneeCaisseOuverte){ %>
+		         				<jsp:include page="/domaine/caisse_restau/mobile/commande-detail.jsp" />
+		         			<%} %>
+						</div>
+						
+						<!-- Panneau droit -->
+						<div style="float: left;width:100%;overflow:auto;background-color: white;padding-left: 5px;padding-top: 5px;padding-right: 2px;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_RIGHT", null)%>" id="right-div">
+							<jsp:include page="/domaine/caisse_restau/mobile/caisse-right-bloc.jsp"></jsp:include>
+						</div>
+							
+						<jsp:include page="/domaine/caisse/mobile/footer-banner.jsp"></jsp:include>
+						
+					</div>
+				</std:form>
+			</div>
+			</div>
+        </div>
+        <!-- /Page Container -->
+    </div>
+    
+    <span id="span_pers_up" style="position: absolute;z-index: 999;right: 30px;width: 150px;top: 29px;white-space: nowrap;">
+    	<span id="span_pers"></span>
+    </span>
+    
+    <!-- Main Container -->
+    <jsp:include page="/WEB-INF/fragment/footer-resources.jsp"></jsp:include>
+	<jsp:include page="/WEB-INF/fragment/static-panels.jsp"/>	
+	
+  </body>
+    
+</html>

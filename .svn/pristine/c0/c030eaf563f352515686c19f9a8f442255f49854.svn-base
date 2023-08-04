@@ -1,0 +1,17 @@
+package appli.model.domaine.compta.dao;
+
+import java.util.Date;
+
+import framework.model.beanContext.ExercicePersistant;
+import framework.model.util.IGenericJpaDao;
+
+public interface IExerciceDao extends IGenericJpaDao<ExercicePersistant, Long>{
+
+	Date getMaxDateFin();
+	ExercicePersistant getExerciceByDate(Date dateDebut, Date dateFin);
+
+	ExercicePersistant getExerciceSuivant(ExercicePersistant e);
+	ExercicePersistant getExercicePrecedent(ExercicePersistant e);
+
+	ExercicePersistant getLastExercice();
+}

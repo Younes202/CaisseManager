@@ -1,0 +1,370 @@
+/** IS_DESK_VIEW */
+@media only screen and (min-width: 992px) /*and (max-width: 1199px)*/ {
+	#widget-body{
+	    float: left;
+	    padding: 0px;
+	    margin: 0px;
+	    width: 72%;
+	}
+	#footer-cmd-div{
+		width: 100%;
+	    float: left;
+	    height: 50px;
+	    margin-top: 5px;
+	    text-align: center;
+	    background-color: #e0e0e0;
+	}
+	#div_detail_cmds{
+		height: calc(100vh - 180px);
+	}
+	#annul_cmd_main{
+		padding-top: 0px;
+	    color: red;
+	    height:49px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	    text-align: left;
+	    width: 158px;
+	    margin-left: 15px;
+	}
+	#btn_encaiss_val{
+	    padding-top: 0px;
+	    height: 49px;
+	    width: 158px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	}
+		/** -------------- WIZARD MNU ------------ */
+	#btn-wizard-prev{
+		border: 1px solid #d0d0d0;
+	    color: #9c27b0;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#btn-wizard-next{
+		border: 1px solid #d0d0d0;
+	    color: #9c27b0;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#btn-wizard-end{
+		border: 1px solid #d0d0d0;
+	    color: #487f08;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#footer_cmd_div{
+		width: 70%;
+		height: 30px;
+		text-align: center;
+		position: fixed;
+		bottom: 56px;
+		margin-top: 5px;
+	}
+	/** -------------- END WIZARD MNU ------------ */
+	#det_total{
+		position: absolute;
+    	right: 17px;
+	}
+	#context-mnu{
+		position: absolute;
+		top: 42px; 
+	}
+	.page-body{
+		width: 90%;
+	    margin-left: 5%;
+	    position:fixed; 
+	    padding: 0px;
+	    margin-top: 50px !important; 
+	}
+	#right-div{
+		height: 102vh;
+		float: left;
+		width:100%;
+		overflow:auto;
+		background-color: white;
+	}
+	#tab_det_fam{
+		height: calc(100vh - 109px);
+	}
+	.page-header{
+	    width: 90%;
+	    margin-left: 5%;
+	}
+	.main-ets-div{
+		overflow: hidden;
+		overflow: calc(100vh - 50px);
+	}
+	#left-div{
+		display: block;
+	    position: fixed;
+	    width: 25%;
+	    z-index: 99;
+	    right: 5%;
+	    min-width: 350px;
+	}
+	#close_modal{
+		display: none;
+	}
+}
+
+/** IS_TAB_VIEW */
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+	#widget-body{
+	    float: left;
+	    padding: 0px;
+	    margin: 0px;
+	    width: 70%;
+	}
+	#footer-cmd-div{
+		width: 100%;
+	    float: left;
+	    height: 50px;
+	    margin-top: 5px;
+	    text-align: center;
+	    background-color: #e0e0e0;
+	}
+	#div_detail_cmds{
+		height: calc(100vh - 102px);
+	}
+	#annul_cmd_main{
+		padding-top: 0px;
+	    color: red;
+	    height:49px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	    text-align: left;
+	    width: 158px;
+	    margin-left: 15px;
+	}
+	#btn_encaiss_val{
+	    padding-top: 0px;
+	    height: 49px;
+	    width: 158px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	}
+		/** -------------- WIZARD MNU ------------ */
+	#btn-wizard-prev{
+		border: 1px solid #d0d0d0;
+	    color: #9c27b0;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#btn-wizard-next{
+		border: 1px solid #d0d0d0;
+	    color: #9c27b0;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#btn-wizard-end{
+		border: 1px solid #d0d0d0;
+	    color: #487f08;
+	    height: 51px;
+	    width: 150px;
+	    font-size: 21px;
+	    border-radius: 11px;
+	    background-color: #f8f8f8 !important;
+	}
+	#footer_cmd_div{
+		width: 70%;
+		height: 30px;
+		text-align: center;
+		position: fixed;
+		bottom: 56px;
+		margin-top: 5px;
+	}
+	/** -------------- END WIZARD MNU ------------ */
+	#det_total{
+		position: absolute;
+    	right: 17px;
+	}
+	#context-mnu{
+		position: absolute;
+		top: 42px; 
+	}
+	.page-body{
+		width: 90%;
+	    margin-left: 5%;
+	    position:fixed; 
+	    padding: 0px;
+	    margin-top: 50px !important; 
+	}
+	#right-div{
+		height: 102vh;
+		float: left;
+		width:100%;
+		overflow:auto;
+		background-color: white;
+	}
+	#tab_det_fam{
+		height: calc(100vh - 109px);
+	}
+	.page-header{
+	    width: 90%;
+	    margin-left: 5%;
+	}
+	.main-ets-div{
+		overflow: hidden;
+		overflow: calc(100vh - 50px);
+	}
+	#left-div{
+		display: block;
+	    position: fixed;
+	    width: 25%;
+	    z-index: 99;
+	    right: 5%;
+	    min-width: 350px;
+	}
+	#close_modal{
+		display: none;
+	}
+}
+
+/** IS_PHONE_VIEW */
+@media only screen and (max-width: 767px) {
+	#widget-body{
+	    padding: 1px;
+	    width: 100%;
+	}
+	#det_total{
+		position: relative;
+	}
+	/** -------------- WIZARD MNU ------------ */
+	#btn-wizard-prev{
+		padding-top: 0px;
+		position:fixed;
+		bottom:103px;
+		left:0px; 
+		height: 25px;
+		width: 150px;
+		font-size: 18px;
+		font-weight: bold;
+		margin-right: 9px;
+		border-radius: 40px;
+	}
+	#btn-wizard-next{
+		padding-top: 0px;
+		position:fixed;
+		bottom:103px;
+		right:0px; 
+		height: 25px;
+		width: 150px;
+		font-weight: bold;
+		font-size: 18px;
+		border-radius: 40px;
+	}
+	#btn-wizard-end{
+		padding-top: 0px;
+		position:fixed;
+		bottom:103px; 
+		right:0px;
+		height: 25px;
+		width: 150px;
+		font-weight: bold;
+		font-size: 18px;
+		border-radius: 40px;
+		background-color: #529609 !important;
+	}
+	#footer_cmd_div{
+		width: 100%;
+		height: 30px;
+		text-align: center;
+		position: fixed;
+		bottom: 56px;
+		margin-top: 5px;
+	}
+	/** -------------- END WIZARD MNU ------------ */
+	
+	#context-mnu{
+		position: relative;
+	}
+	.page-body{
+		width: 100%;
+	    position:fixed; 
+	    margin: 0px;
+	    padding: 0px;
+	    margin-top: 50px !important; 
+	    width: 100%;
+	}
+	#right-div{
+		height: calc(100vh - 59px);
+		overflow: hidden;
+		float: left;
+		width:100%;
+		background-color: white;
+	}
+	#tab_det_fam{
+		height: calc(100vh - 150px);
+	}
+	.page-header{
+	    width: 100%;
+    	margin-left: 0%;
+	}
+	#left-div{
+		display: none;
+		width:100%;
+	}
+	#close_modal{
+		display: block;
+	}
+	.main-ets-div{
+		overflow: hidden;
+		overflow: calc(100vh - 50px);
+	}
+	#div_detail_cmds{
+		height: calc(100vh - 120px);
+	}
+	#annul_cmd_main{
+		padding-top: 0px;
+	    color: red;
+	    height:49px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	    text-align: left;
+	    width: 158px;
+	    margin-left: 15px;
+	}
+	#btn_encaiss_val{
+	    padding-top: 0px;
+	    height: 49px;
+	    width: 158px;
+	    border-radius: 11px;
+	    background: #f8f8f8 !important;
+	    font-size: 20px;
+	}
+	#footer-cmd-div{
+		width: 100%;
+	    height: 51px;
+	    margin-top: 1px;
+	    text-align: center;
+	    background-color: #e0e0e0;
+	    position: fixed;
+    	bottom: 0px;
+    	z-index: 999;
+	}
+	.page-header-fixed+.page-body{
+		margin-top: 49px !important;
+		border-top: 1px solid black;
+	}
+}

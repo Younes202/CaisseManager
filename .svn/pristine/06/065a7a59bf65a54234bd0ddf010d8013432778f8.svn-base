@@ -1,0 +1,758 @@
+<%@page import="appli.model.domaine.util_srv.raz.RazService"%>
+<%@page import="appli.model.domaine.personnel.persistant.SocieteLivrPersistant"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementOffrePersistant"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementArticlePersistant"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.ClientPersistant"%>
+<%@page import="appli.model.domaine.administration.persistant.UserPersistant"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.EmployePersistant"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="java.util.Collections"%>
+<%@page import="java.util.LinkedHashSet"%>
+<%@page import="java.util.Set"%>
+<%@page import="java.util.HashMap"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="java.util.Map"%>
+<%@page import="java.math.BigDecimal"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="framework.model.common.service.MessageService"%>
+<%@page import="framework.controller.bean.message.GrowlMessageBean"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.BooleanUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.TYPE_LIGNE_COMMANDE"%>
+<%@page import="java.util.List"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+
+<style>
+#cmd-table td{
+	vertical-align: middle;
+}
+</style>
+
+<%
+boolean isDevise = !BigDecimalUtil.isZero(BigDecimalUtil.get(ContextGloabalAppli.getGlobalConfig("DEVISE_TAUX")));
+BigDecimal tauxDevise = (isDevise ? BigDecimalUtil.get(ContextGloabalAppli.getGlobalConfig("DEVISE_TAUX")) : null);
+
+String CURRENT_ITEM_ADDED = (String)ControllerUtil.getUserAttribute("CURRENT_ITEM_ADDED", request);
+String CURRENT_MENU_NUM = (String)ControllerUtil.getUserAttribute("CURRENT_MENU_NUM", request);
+CaisseMouvementPersistant CURRENT_COMMANDE = (CaisseMouvementPersistant)ControllerUtil.getUserAttribute("CURRENT_COMMANDE", request);
+List<CaisseMouvementArticlePersistant> listSortedArticle = CURRENT_COMMANDE.getList_article();
+if(listSortedArticle == null){
+	listSortedArticle = new ArrayList<>();
+}
+Integer NBR_NIVEAU_CAISSE = StringUtil.isNotEmpty(ContextGloabalAppli.getGlobalConfig("NBR_NIVEAU_CAISSE"))?Integer.valueOf(ContextGloabalAppli.getGlobalConfig("NBR_NIVEAU_CAISSE")):null;
+IArticleService service = (IArticleService)ServiceUtil.getBusinessBean(IArticleService.class);
+
+boolean isCaisseVerouille = ControllerUtil.getMenuAttribute("IS_CAISSE_VERROUILLE", request) != null;
+boolean isJourneeCaisseOuverte = !isCaisseVerouille 
+				&& ContextAppliCaisse.getJourneeCaisseBean() != null 
+				&& "O".equals(ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse());
+boolean isPrintHisto = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PRINT_HISTO")); 
+boolean isPrintCmdTmp = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PRINT_TICKET_TEMP"));
+boolean isShowModeCmd = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SHOW_MODE_CMD"));
+boolean isRestau = ContextAppli.IS_RESTAU_ENV();
+
+boolean isManager = ContextAppli.getUserBean().isInProfile("MANAGER");
+boolean isAdmin = ContextAppli.getUserBean().isInProfile("ADMIN");
+
+boolean isConfirmDelRow = (!isAdmin && !isManager && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SECURE_DELETE_DETAIL")));
+boolean isConfirmDelCmd = (!isAdmin && !isManager && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SECURE_DELETE_CMD")));
+%>
+<div style="background-color: white;">
+<!-- R&eacute;cap commande -->
+<div style="height: 70px;border-radius: 48px;border: 1px dashed #cd4c4c; <%=StringUtil.isEmpty(CaisseWebBaseAction.GET_STYLE_CONF("PANEL_ENETETE", null))?"background-image: linear-gradient(#eeeeee, #bab6b6);":"background:"+ContextGloabalAppli.getGlobalConfig("PANEL_COMMANDE")%>">
+
+	<div class="btn-group" id="context-mnu" style="margin-left: 5px;">
+<%
+	if(isJourneeCaisseOuverte){
+%>			
+	   <a class="btn btn-xs btn-succes dropdown-toggle" data-toggle="dropdown" aria-expanded="false" style="border-radius: 20px;padding-top: 0px;height: 40px;width: 57px;margin-top: -29px;font-size: 22px;font-weight: bold;">
+	   		<i class="fa fa-ellipsis-v"></i>
+	   		<i class="fa fa-angle-down"></i>
+	   </a>
+	   <ul class="dropdown-menu dropdown-yellow" role="menu">
+	       <li>
+	       		<a href="javascript:" targetDiv="left-div" params="addCli=1" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.ajouterGroupe")%>" >
+	       		<i class="fa fa-male" style="color: black;font-size: 16px;"></i> Ajouter client</a>
+	       	</li>
+	       	<%if(isPrintHisto || StringUtil.isEmpty(CURRENT_COMMANDE.getMode_paiement())){%>
+				<%if(isPrintCmdTmp || StringUtil.isNotEmpty(CURRENT_COMMANDE.getMode_paiement())){%>
+					<li>
+						<std:link classStyle="" params='<%="mvm="+CURRENT_COMMANDE.getId() %>' targetDiv="div_gen_printer" action="caisse-web.caisseWeb.print" tooltip="Imprimer le ticket">
+							<i class="fa fa-print" style="color: blue;font-size: 16px;"></i> Imprimer
+						</std:link>
+					</li>	
+				<%} %>
+			<%} %>
+			
+			<%if(isDevise){ %>
+			<li>
+	       		<a href="javascript:" targetDiv="left-div" params="isTop=1" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.manageDevise")%>" >
+	       			<i class="fa fa-male" style="color: green;font-size: 16px;"></i> En devise
+	       		</a>
+	       	</li>
+			<%} %>
+	    </ul>
+<%
+	}
+%>	    
+	</div>
+<!-- Total -->
+	<span style="font-weight: bold;font-size: 50px;margin-left: 15%;line-height: 71px;"> 
+		<%=CURRENT_COMMANDE!=null?BigDecimalUtil.formatNumberZeroBd(CURRENT_COMMANDE.getMtt_commande_net()):""%>
+	</span>
+	
+	<%if(isShowModeCmd){
+		String sel = "border: 1px solid red;border-radius: 7px;background-color: #ffc107;";
+	%>
+		<span style="position: absolute;left: 304px;top: 4px;">
+	    	<%if(!BooleanUtil.isTrue(ContextAppliCaisse.getCaisseBean().getIs_livraison())){
+	    		if(isRestau){%>
+	    			<std:link style='<%="P".equals(CURRENT_COMMANDE.getType_commande()) ? sel:"" %>' classStyle="" targetDiv='left-div' action="caisse-web.caisseWeb.selectModeLivraison" params="mdL=P">
+	    				<i style="color: black;" class="fa fa-street-view"></i> P
+	    			</std:link> | 
+	    		<%} %>
+	    		<std:link style='<%="E".equals(CURRENT_COMMANDE.getType_commande()) ? sel:"" %>' classStyle="" targetDiv='left-div' action="caisse-web.caisseWeb.selectModeLivraison" params="mdL=E">
+	    			<i style="color: black;" class="fa fa-dropbox"></i> E
+	    		</std:link> | 
+	    	<%}%>
+	    	<std:link style='<%="L".equals(CURRENT_COMMANDE.getType_commande()) ? sel:"" %>' classStyle="" targetDiv='left-div' action="caisse-web.caisseWeb.selectModeLivraison" params="mdL=L">
+	    		<i style="color: black;" class="fa fa-motorcycle"></i> L
+	    	</std:link>
+    	</span>
+    <%} %>	
+	
+</div>
+  
+ <div style="color: yellow;overflow: auto;<%=StringUtil.isEmpty(CaisseWebBaseAction.GET_STYLE_CONF("PANEL_ENETETE", null))?"background: white;":"background:"+ContextGloabalAppli.getGlobalConfig("PANEL_COMMANDE")%>" id="div_detail_cmds">    		
+<table style="width: 100%;color: black;" id="cmd-table">
+
+	<%
+		if(request.getAttribute("mtt_rendu") != null){
+	%>
+	<tr>
+		<td>
+			<div class="alert alert-success fade in radius-bordered alert-shadowed" style="font-size: 24px;margin-top: 50px;">
+		         <button class="close" data-dismiss="alert" style="margin-top: 10px;">X</button>
+		         <i class="fa-fw fa fa-check"></i>
+		         A rendre :<strong> <%=BigDecimalUtil.formatNumber(BigDecimalUtil.get(""+request.getAttribute("mtt_rendu")))%></strong> 
+		     </div>
+     	</td>
+     </tr>
+	<%
+		}else if(StringUtil.isNotEmpty(CURRENT_COMMANDE.getRef_commande()) && CURRENT_COMMANDE.getRef_commande().indexOf("-") != -1 && CURRENT_COMMANDE.getList_article().size()>0){
+	%>
+	<tr style="background-color: #f4f4f4;">
+		<td colspan="3" style="text-align: center;color: blue;font-style: italic"><%=CURRENT_COMMANDE.getRef_commande()%></td>
+	</tr>
+	<%
+		}
+	%>
+<%
+	// Total par menu
+String currentTableRef = (String)ControllerUtil.getUserAttribute("CURRENT_TABLE_REF", request);
+
+Map<String, BigDecimal> mttMenuMap = new HashMap<>();
+List<String> mttTableClient = new ArrayList<>();
+Map<String, Integer> nbrCouvertTable = (Map<String, Integer>)ControllerUtil.getMenuAttribute("COUVERTS_TABLE", request);
+if(nbrCouvertTable == null){
+	nbrCouvertTable = new HashMap<>();
+}
+
+List<String> listTables = new ArrayList<>();
+List<Integer> listIdxClient = new ArrayList<>();
+for(CaisseMouvementArticlePersistant caisseMvmP : listSortedArticle){
+	if(caisseMvmP == null || BooleanUtil.isTrue(caisseMvmP.getIs_annule())){
+		continue;
+	}
+	if(!listIdxClient.contains(caisseMvmP.getIdx_client()) && caisseMvmP.getIdx_client() != null){
+		listIdxClient.add(caisseMvmP.getIdx_client()); 
+	}
+	// Clients par table
+	if(!mttTableClient.contains(caisseMvmP.getIdx_client()+"_"+caisseMvmP.getRef_table())){
+		mttTableClient.add(caisseMvmP.getIdx_client()+"_"+caisseMvmP.getRef_table());
+	}
+	
+	// Ajout tables
+	 if(StringUtil.isNotEmpty(caisseMvmP.getRef_table()) && !listTables.contains(caisseMvmP.getRef_table())){
+		 listTables.add(caisseMvmP.getRef_table());
+	 }
+	// Nombre de couverts
+	if(caisseMvmP.getNbr_couvert() != null){
+		nbrCouvertTable.put(caisseMvmP.getRef_table(), caisseMvmP.getNbr_couvert());
+	}
+	
+	if(StringUtil.isEmpty(caisseMvmP.getMenu_idx())){
+	     continue;
+	 }
+	 mttMenuMap.put(caisseMvmP.getMenu_idx(),  BigDecimalUtil.add( mttMenuMap.get(caisseMvmP.getMenu_idx()), caisseMvmP.getMtt_total()));
+}
+	// Trier les tables
+	if(listTables.size() > 0){
+		Collections.sort(listTables);
+	}
+	if(listIdxClient.size() > 0){
+		Collections.sort(listIdxClient);
+	}
+	
+	if(listIdxClient != null && listIdxClient.size()>0 && listIdxClient.get(listIdxClient.size()-1) > CURRENT_COMMANDE.getMax_idx_client()){
+		CURRENT_COMMANDE.setMax_idx_client(listIdxClient.get(listIdxClient.size()-1));
+	}
+	
+	if(currentTableRef == null){
+		if(listTables.size() == 0){
+			listTables.add("XX");
+		}
+	} else if(!listTables.contains(currentTableRef)){
+		listTables.add(currentTableRef);
+	}
+
+	Integer idxArticle = 0;
+	int nbrNiveau = 0;
+	BigDecimal sousTotal = null;
+	BigDecimal sousTotalTable = null;
+	Integer currentIdxClient = (Integer)ControllerUtil.getUserAttribute("CURRENT_IDX_CLIENT", request);
+
+	// Tables -------------
+	int idxTable = 0;
+	for(String refTable : listTables){
+		idxTable++;
+		boolean isTablePassed = true;
+		
+		// Clients
+		for(int i=1; i<=CURRENT_COMMANDE.getMax_idx_client(); i++){
+	if(currentIdxClient != null && currentIdxClient!=i && !listIdxClient.contains(i)){
+		continue;
+	}
+
+	// Si client de la table
+	if(!"XX".equals(refTable) 
+			&& !refTable.equals(currentTableRef) 
+			&& !mttTableClient.contains(i+"_"+refTable)
+		){
+		continue;
+	}
+	
+	boolean isFamillePassed = false;
+	if(listIdxClient.size() > 1){
+		    	   if(i != listIdxClient.get(0)){
+%>
+		    		   <tr style="color: #d73d32;font-weight: normal;background-color: #eeeeee;" class="client-root-style">
+			       			<td colspan="2" align="right" style="font-weight: bold;">SOUS TOTAL CLIENT</td>
+			       			<td align="right" style="font-weight: bold;"><%=BigDecimalUtil.formatNumber(sousTotal)%></td>
+			      	   </tr>
+		    	 <%
+		    	 	}
+		    	 		    	 
+		    	 		    	 if(isTablePassed && !"XX".equals(refTable)){
+		    	 	    	   if(idxTable != 1){
+		    	 %>
+			    		   <tr style="color: black;font-weight: normal;background-color: #ccc;" class="client-root-style">
+				       			<td colspan="2" align="right" style="font-weight: bold;">SOUS TOTAL TABLE</td>
+				       			<td align="right" style="font-weight: bold;"><%=BigDecimalUtil.formatNumber(sousTotalTable)%></td>
+				      	   </tr>
+			    	 <%
+			    	 	sousTotalTable = null;
+			    	 	    	   }
+			    	 	      }
+			    	 	  }
+			    	 %>
+			  
+			  <%
+			  			  	// 			  if(listIdxClient.size() > 1 || ){ 
+			  			  	 	 if(isTablePassed && !"XX".equals(refTable)){
+			  			  %>
+		    	 <tr style="    color: black;
+    background-color: #262626;
+    height: 35px;
+    text-transform: uppercase;
+    font-size: 22px;" class="client-root-style" par="istab=1&ref_tab=<%=refTable%>&tp=TAB">
+		       		<td colspan="3" style="border-radius: 15px;font-weight: bold;color: #fbfbfb;" align="center">
+		       			<%=(currentTableRef!=null && currentTableRef.equals(refTable) ? "<i style='color:#e3f2fd;' class='fa fa-arrow-circle-right'></i>":"")%> 
+		       			<i class="fa fa-square-o"></i>
+		       			<%=refTable%> <%=nbrCouvertTable.get(refTable)!=null?" ("+nbrCouvertTable.get(refTable)+" couverts)":""%>
+		       		</td>
+		       </tr>
+		    	 <%
+		    	 	//}
+		    	 		    	}
+		    	 %> 
+		   	 <%
+ 		   	 	if(currentIdxClient != null && (currentIdxClient!=1 || request.getAttribute("is_cliIdxAdded")!=null || listIdxClient.size()>0)){
+ 		   	 %> 
+		    	   <tr style="background-color: #646464;" class="client-root-style" par="iscli=1&idx_cli=<%=i%>&tp=CLI">
+			       		<td colspan="3" style="padding-left: 10px; color: white;"> 
+			       			<%if(CURRENT_COMMANDE!=null && BooleanUtil.isTrue(ContextAppliCaisse.getCaisseBean().getIs_ticketPersonnalise()) && listIdxClient.size()>0){
+			       				String param_1 = "wibaj=1&cli="+i;
+			       			%>
+						    	<std:link classStyle="btn btn-default btn-sm shiny" style="color:#f44336;font-size: 18px;padding: 0px 9px 0px 11px;" params="<%=param_1 %>" action="caisse-web.caisseWeb.printTicketCaissePersonalise" targetDiv="div_gen_printer" icon="fa fa-print" tooltip="Imprimer le ticket personnalis&eacute;" />
+							<%} %>
+						
+			       			
+			       			<i class="fa fa-street-view" style="color: white;font-size: 18px;"></i>
+			       			<%=((currentIdxClient!=null && currentIdxClient==i) ? "<i style='color:#e3f2fd;' class='fa fa-arrow-circle-right'></i>":"")%>  CLIENT <%=i%>
+			       		</td>
+			       </tr>
+		      <%
+		      	}
+		      		    sousTotal = null;
+		      		    isTablePassed = false;
+		      		    //
+		      	for(CaisseMouvementArticlePersistant caisseMvmP : listSortedArticle){
+		      		       if(caisseMvmP == null || BooleanUtil.isTrue(caisseMvmP.getIs_annule()) || (caisseMvmP.getIdx_client() != null && caisseMvmP.getIdx_client()!=i) || (caisseMvmP.getRef_table()!=null && !caisseMvmP.getRef_table().equals(refTable))){
+		      		           continue;
+		      		       }
+		      		      sousTotal = BigDecimalUtil.add(sousTotal, (BooleanUtil.isTrue(caisseMvmP.getIs_offert()) ? null:caisseMvmP.getMtt_total()));
+		      		      sousTotalTable = BigDecimalUtil.add(sousTotalTable, (BooleanUtil.isTrue(caisseMvmP.getIs_offert()) ? null:caisseMvmP.getMtt_total()));
+		      		       
+		      		      
+		      		    boolean isDeviseLine = (BooleanUtil.isTrue(caisseMvmP.getIs_devise()) || BooleanUtil.isTrue(CURRENT_COMMANDE.getIs_devise()));
+		      		      
+		      		       // Ajout du num�ro dans le tableau
+		      		       String type = caisseMvmP.getType_ligne();
+		      		       String libCmd = caisseMvmP.getLibelle();
+		      		       if(type == null){
+		      		           type = "XXX";
+		      		       }
+		      		       
+		      		       if(type.equals(TYPE_LIGNE_COMMANDE.MENU.toString()) && (caisseMvmP.getLevel() == null || caisseMvmP.getLevel() > 1)) {
+		      		           idxArticle++;
+		      		           libCmd = idxArticle + " - " + libCmd;
+		      		       } else if(type.equals(TYPE_LIGNE_COMMANDE.ART.toString())){
+		      		           idxArticle++;
+		      		           libCmd = idxArticle + " - " + libCmd;
+		      		       }
+		      		       
+		      		       if(StringUtil.isNotEmpty(caisseMvmP.getCommentaire())){
+		      		           libCmd = libCmd + " <i class='fa fa-comments-o' style='color:orange;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Commentaire' data-content='"+caisseMvmP.getCommentaire()+"' data-original-title='' title=''></i>";
+		      		       }
+		      		       if(BooleanUtil.isTrue(caisseMvmP.getIs_client_pr())){
+		      		    	   libCmd = libCmd + " <i class='fa fa-long-arrow-down' style='color:#4caf50;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Prix r&eacute;duit. Intial : ' data-content='"+BigDecimalUtil.formatNumber(caisseMvmP.getOpc_article().getPrix_vente())+"' data-original-title='' title=''></i>";
+		      		       }
+		      		       if(isDeviseLine && !BigDecimalUtil.isZero(caisseMvmP.getMtt_total())){
+		      		     	   libCmd = libCmd + " <i class='fa fa-euro' style='color:#53a93f;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Paiement en devise' data-original-title='' title=''></i>"
+		      		     			   			+ "<span style='font-size:10px;color:green;font-weight: normal;'>("+BigDecimalUtil.formatNumber(BigDecimalUtil.divide(caisseMvmP.getMtt_total(), tauxDevise))+")</span>";
+		      		       }
+		      		       
+		      		     String qte = RazService.getQteFormatted(caisseMvmP.getQuantite());
+			      	       
+		      		     if(BooleanUtil.isTrue(caisseMvmP.getIs_suite_end())){
+		       				libCmd = libCmd + " <i issuiteend='1' class='fa fa-dot-circle-o' style='color:black;font-size: 17px;'></i>";
+		       			 } else if(BooleanUtil.isTrue(caisseMvmP.getIs_suite_lock())){
+			      	    	libCmd = libCmd + " <i issuite='1' class='fa fa-clock-o' style='color:#4caf50;font-size: 17px;'></i>";
+			      	     }
+		      	       
+		      		       String mttTotal = "";
+		      		       if(BooleanUtil.isTrue(caisseMvmP.getIs_offert())){
+		      		    	   mttTotal = "<i isoff='1' class='fa fa-gift'style='color:green;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Article offert' data-content='Prix : "+BigDecimalUtil.formatNumber(caisseMvmP.getMtt_total())+"' data-original-title='' title=''></i>";
+		      		       } else if(!BigDecimalUtil.isZero(caisseMvmP.getMtt_total())){
+			      		    	mttTotal = BigDecimalUtil.formatNumber(caisseMvmP.getMtt_total()); 	 
+		      		       }
+		      		       
+		      		       String styleTd = "";
+		      		       boolean isSelected = false;
+		      		       if(CURRENT_ITEM_ADDED != null){
+		      		    	   String parentCode = (caisseMvmP.getParent_code() != null && caisseMvmP.getParent_code().indexOf("_")!=-1 ? caisseMvmP.getParent_code().substring(caisseMvmP.getParent_code().indexOf("_")+1) : caisseMvmP.getParent_code());
+		      		    	   String currElmntPath = caisseMvmP.getIdx_client()
+		      		    			   					+ "-" + caisseMvmP.getElementId()
+		      		    			   					+ "-" + caisseMvmP.getType_ligne()
+		      		    			   					+ "-" + parentCode
+		      		    			   					+ (caisseMvmP.getMenu_idx()==null ?"":"-"+caisseMvmP.getMenu_idx())
+		      		    			   					+ (StringUtil.isNotEmpty(caisseMvmP.getRef_table()) ? "-"+caisseMvmP.getRef_table() : "");
+		      		    	   
+		      		    	   if(CURRENT_ITEM_ADDED.equals(currElmntPath)){
+		      		    		   isSelected = true;
+		      		       		}
+		      		       }
+		      		       
+		      		       String classType = "";
+		      		       String height = "35px";
+		      		       boolean isRootMenu = false;
+		      		       boolean isMenu = false;
+		      		      if(caisseMvmP.getMenu_idx() != null || type.equals(TYPE_LIGNE_COMMANDE.MENU.toString())){
+		      		    	  if(type.equals(TYPE_LIGNE_COMMANDE.MENU.toString())) {
+		      		    		  // Ajouter une ligne e s�paration
+       	       		    		  if(caisseMvmP.getLevel() != null && caisseMvmP.getLevel() == 1){
+       	       		    			  isRootMenu = true;
+       	       		    			  classType = "menu-cat-style cat-cmd-detail";
+       	       		    		  } else{
+       	       		    			  if(BooleanUtil.isTrue(caisseMvmP.getIs_menu())){
+       	       		    			 	 isMenu = true;
+       	       		    			  }
+       	       		        	   	  classType = "menu-style cat-cmd-detail";
+       	       		    		  }
+       	       		           } else if(type.equals(TYPE_LIGNE_COMMANDE.ART_MENU.toString())) {
+       	       		        	   classType = "ligne-style";
+       	       		        	   height = "23px";
+       	       		        	   nbrNiveau = 0;
+       	       		           } else if(type.equals(TYPE_LIGNE_COMMANDE.GROUPE_MENU.toString())){
+       	       		        	   classType = "group-style-fam";//"group-style cat-cmd-detail";
+       	       		        	   height = "5px";
+       	       		        	   nbrNiveau++;
+       	       		           } else if(type.equals(TYPE_LIGNE_COMMANDE.GROUPE_FAMILLE.toString())){
+       	       		        	   classType = "group-style-fam";//"group-style cat-cmd-detail";
+       	       		        	   height = "5px";
+       	       		        	   nbrNiveau++;
+       	       		           }
+       	       		       } else{//---------------------------------------------------------
+       	       		    	   if(type.equals(TYPE_LIGNE_COMMANDE.ART.toString())){
+       	       		    		   classType = "ligne-fam-style";
+       	       		    		   height = "23px";
+       	       		    		   nbrNiveau = 0;
+       	       		           } else if(type.equals(TYPE_LIGNE_COMMANDE.GROUPE_FAMILLE.toString())){
+       	       		        	   // Ajouter une ligne e s�paration
+       	       		        	   if(!isFamillePassed){ %>
+					        	       <tr style="height:3px;color: black;background-color:<%=isSelected?"#ffca06;":"#f35318"%>;" <%=isSelected?" isSel='1' ":""%> class="menu-root-style">
+					        	       		<td colspan="3" align="center"></td>
+					        	       </tr>
+					        	       <%
+					        	       	isFamillePassed = true;
+		        	       		        	   }
+		        	       		        	   classType = "group-style-fam";//"famille-style cat-cmd-famille";
+		        	       		        	   height = "5px";
+		        	       		        	   nbrNiveau++;
+		        	       		           } 
+		        	       		       }
+		        	       		       
+		        	       		       boolean isArticle = (type.equals(TYPE_LIGNE_COMMANDE.ART.toString()) || type.equals(TYPE_LIGNE_COMMANDE.ART_MENU.toString()));
+		        	       		       boolean isToAdd = (isArticle || NBR_NIVEAU_CAISSE == null || nbrNiveau <= NBR_NIVEAU_CAISSE) && !caisseMvmP.getLibelle().startsWith("#");
+		        	       		       String params = (BooleanUtil.isTrue(caisseMvmP.getIs_offert())?"isaf=1&":"") 
+		        	       		    		   				+"cli="+i
+		        	       		    		   				+"&cd="+caisseMvmP.getCode()
+		        	       		    		   				+"&elm="+caisseMvmP.getElementId()
+		        	       		    		   				+"&par="+StringUtil.getValueOrEmpty(caisseMvmP.getParent_code())
+		        	       		    		   				+"&mnu="+caisseMvmP.getMenu_idx()
+		        	       		    		   				+"&tbl="+StringUtil.getValueOrEmpty(caisseMvmP.getRef_table())
+		        	       		    		   				+"&tp="+caisseMvmP.getType_ligne()
+		        	       		    		   				+(caisseMvmP.getId()!=null?"&isDb=1":"");
+		        	       		       
+		        	       		       if(caisseMvmP.getLevel() != null && caisseMvmP.getLevel() > 1){
+		        	       		    	   styleTd = styleTd + "padding-left:"+(7*caisseMvmP.getLevel())+"px;";
+		        	       		       } else if(isArticle){
+		        	       		    	   styleTd = styleTd + "padding-left:30px;";
+		        	       		       }
+		        	       		      
+		        	       		       if(isToAdd){
+		        	       		    	   boolean isNotArt = (!type.equals(TYPE_LIGNE_COMMANDE.ART.toString()) && !type.equals(TYPE_LIGNE_COMMANDE.ART_MENU.toString()));
+		        	       		       
+		        	       		       		boolean isToClolapse = (caisseMvmP.getMenu_idx()!= null 
+		        	       		       										&& !type.equals(TYPE_LIGNE_COMMANDE.MENU.toString())
+		        	       		       										&& (CURRENT_MENU_NUM == null || !CURRENT_MENU_NUM.equals(caisseMvmP.getMenu_idx())));
+		        	       %>
+		       
+		       <%
+		       		       	if(isRootMenu){
+		       		       %>
+		       	<tr id="<%=isToClolapse ? "tr_"+caisseMvmP.getMenu_idx():""%>" class="<%=classType%>" style="color:#ebbd08;background-color: #fff8c6;font-size: 19px;height: <%=height%>; <%=isSelected?"background-color:#ffca06;":""%>" <%=isSelected?" isSel='1' ":""%> par="<%="isroot=1&"+params%>">
+		       		<td colspan="3" style="<%=styleTd%>;<%="5px".equals(height)?"":"line-height:"+height%>;text-align:center;">
+		       			<%=libCmd%>
+		       		</td>
+		       	</tr>
+		       <%
+		       	} else{ 
+		       		       String mttTotalMenu = BigDecimalUtil.formatNumber(mttMenuMap.get(caisseMvmP.getMenu_idx()));
+		       		       boolean isMtt = (!BigDecimalUtil.isZero(caisseMvmP.getMtt_total()) && !BooleanUtil.isTrue(caisseMvmP.getIs_offert()));
+		       %>
+		         <tr id="<%=isToClolapse ? "tr_"+caisseMvmP.getMenu_idx():""%>" class="<%=classType%> <%=isMenu?(" mnu_"+caisseMvmP.getMenu_idx()):""%>" style="height: <%=height%>;<%=isToClolapse?"display:none;":""%> <%=isSelected?"background-color:#ffca06;":""%><%=isArticle?"font-weight:bold;":""%>" <%=isSelected?" isSel='1' ":""%> par="<%=(isMtt?"isart=1&":"")+params%>">
+		       		<td style="<%=styleTd%>;<%="5px".equals(height)?"":"line-height:"+height%>;">
+		       			<%
+		       				if(type.equals(TYPE_LIGNE_COMMANDE.MENU.toString()) && (CURRENT_MENU_NUM == null || !CURRENT_MENU_NUM.equals(caisseMvmP.getMenu_idx())) && caisseMvmP.getLevel()>1 ){
+		       			%>
+		       				<a class="btn btn-default btn-xs icon-only white lnk_mnu" style="padding: 4px 1px;" href="javascript:void(0);" mnu="<%=caisseMvmP.getMenu_idx()%>">
+		       					<i class="fa fa-plus" style="font-size: 16px;color: #03A9F4;"></i>
+			       			</a>
+			       			<%
+			       				Map<String, byte[]> dataimg = service.getDataImage(caisseMvmP.getElementId(), "menu");
+			       				String stl = "";
+			       				if(dataimg.size() > 0){
+			       					stl = "width: 33px;height:33px;float: right;background-size: 33px 33px !important;background: url(data:image/jpeg;base64,"+FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue())+") no-repeat;";
+			       			%>
+		       					<span style="<%=stl%>"></span>
+		       					<%
+		       						}
+				       			} else if(isArticle){
+				       				Map<String, byte[]> dataimg = service.getDataImage(caisseMvmP.getElementId(), "article");
+				       				String stl = "";
+				       				if(dataimg.size() > 0){
+				       					stl = "width: 23px;height:23px;float: right;background-size: 23px 23px !important;background: url(data:image/jpeg;base64,"+FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue())+") no-repeat;";
+		       					%>
+		       					<span style="<%=stl%>"></span>
+		       					<%
+		       						}
+		       							       			}
+		       					%>
+		       		
+		       			<%=(!isNotArt ? "<span class='fa fa-circle' style='color:#4caf50;'></span>&nbsp;":"")+libCmd%>
+		       		</td>
+		       		<td align="right">
+		       			<%
+		       				if(BooleanUtil.isTrue(caisseMvmP.getIs_encaisse()) && isMtt){
+		       			%>
+		       					<i isenc="1" class="fa fa-check-circle-o" style="font-size: 17px;color: #53a93f;"></i>
+		       			<%
+		       				}
+		       			%>
+		       			<%=isNotArt ? "":qte%>
+		       		</td>
+		       		<td align="right" style="font-weight: bold;">
+		       			<%
+		       				if(caisseMvmP.getMenu_idx() == null){
+		       			%>
+		       				<%=mttTotal %> 
+		       			<%
+		       				} else{ 
+		       					boolean isCurrMnu = (CURRENT_MENU_NUM!=null && CURRENT_MENU_NUM.equals(caisseMvmP.getMenu_idx()));
+		       			%>
+		       				<span class="span_mtt_art" style='display:<%=isToClolapse || isCurrMnu ? "":"none"%>;'><%=mttTotal%></span>
+		       				
+		       			<%
+			       			if(BooleanUtil.isTrue(caisseMvmP.getIs_suite_end())){
+			       				libCmd = libCmd + " <i issuiteend='1' class='fa fa-dot-circle-o' style='color:black;font-size: 17px;'></i>";
+			       			} else if(BooleanUtil.isTrue(caisseMvmP.getIs_suite_lock())){
+				      	    	libCmd = libCmd + " <i issuite='1' class='fa fa-clock-o' style='color:#4caf50;font-size: 17px;'></i>";
+				      	 	}
+		       			
+		       				if(BooleanUtil.isTrue(caisseMvmP.getIs_offert())){
+		       					mttTotalMenu = "<i isoff='1' class='fa fa-gift'style='color:green;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Article offert' data-content='Prix : "+mttTotalMenu+"' data-original-title='' title=''></i>";
+		       				}
+		       						       			%>	
+		       				<span class="span_mtt_mnu" style='display:<%=isToClolapse || isCurrMnu ? "none":""%>;'><%=isMenu ? mttTotalMenu : ""%></span>
+		       			<%
+		       				}
+		       			%>	       			
+		       		</td>
+		       </tr>
+		       <%
+		       	}
+		       		       }
+		       	}
+		       	   }
+		       	}
+		       	
+		       	if(listIdxClient.size() > 1){
+		       %>
+ 		 <tr style="color: #d73d32;background-color: #eeeeee;font-weight: normal;" class="menu-root-style">
+	     	<td colspan="2" align="right" style="font-weight: bold;">SOUS TOTAL CLIENT</td>
+	     	<td align="right" style="font-weight: bold;"><%=BigDecimalUtil.formatNumber(sousTotal)%></td>
+	     </tr>
+   <%
+   	}
+   	
+   	if(listTables.size()>0 && !listTables.get(0).equals("XX")){
+   %>
+	 <tr style="color: black;background-color: #ccc;font-weight: normal;" class="menu-root-style">
+    	<td colspan="2" align="right" style="font-weight: bold;">SOUS TOTAL TABLE</td>
+    	<td align="right" style="font-weight: bold;"><%=BigDecimalUtil.formatNumber(sousTotalTable)%></td>
+    </tr>
+	<%
+		}
+		
+   	List<CaisseMouvementOffrePersistant> listOffres = RazService.getListOffre(CURRENT_COMMANDE);
+	   
+   	// Les offres
+	 if(listOffres != null && listOffres.size() > 0){
+	%>
+       <tr style="color: green;" class="menu-root-style">
+       		<td colspan="3" align="center">Offres</td>
+       </tr>
+       <%
+       	for (CaisseMouvementOffrePersistant offreDet : listOffres) {
+       	       if(offreDet.getIs_annule() != null && offreDet.getIs_annule()){
+       	           continue;
+       	       }
+       	       Long idOffre = offreDet.getOpc_offre().getId();
+       	       String libelleOffre = offreDet.getOpc_offre().getLibelle();
+       	       boolean idMajoration = offreDet.getMtt_reduction()!=null && offreDet.getMtt_reduction().compareTo(BigDecimalUtil.ZERO)<0;
+               String params = "cd="+idOffre+"&elm="+offreDet.getOpc_offre().getId()+"&tp=OFFRE";
+       %>
+	       <tr style="color: <%=idMajoration?"green":"red"%>;" par="<%=params%>" class="ligne-style">
+	       		<td><%="**"+libelleOffre%></td>
+	       		<td></td>
+	       			       		
+	       		<%
+	       		String mtt = idMajoration ? BigDecimalUtil.formatNumber(offreDet.getMtt_reduction().abs()) : "-"+BigDecimalUtil.formatNumber(offreDet.getMtt_reduction());
+	       		%>
+	       		<td align="right"><%=mtt%></td>
+	       </tr>
+	       <%
+	       	}
+	          }
+	       %>     
+</table>  
+</div>
+</div>
+
+<%if(ControllerUtil.getUserAttribute("IS_RETOUR", request) != null){ %>
+<%String cmdRef = (String)ControllerUtil.getUserAttribute("RETOUR_CMD", request); %>
+	<span style="color: red;font-size: 18px;position: fixed;bottom:1px;left: 0px;font-weight: bold;background-color: orange;">
+		<i class="fa fa-fw fa-warning"></i> MODE RETOUR<%=cmdRef!=null?" ==> "+cmdRef:"" %>
+	</span>
+<%} %>
+
+<script type="text/javascript">
+	$(document).ready(function (){
+		$("#div_serveur, #div_client_cmd, #div_livreur").html("");
+		
+		<%if(CURRENT_COMMANDE != null){
+		// Serveur
+		UserPersistant serveur = CURRENT_COMMANDE.getOpc_serveur();
+		// Client
+		if(CURRENT_COMMANDE.getOpc_client() != null){ 
+			ClientPersistant client = CURRENT_COMMANDE.getOpc_client();%>
+			var clientStr = "<i class='fa fa-user' style='color:black;'></i><b> <%=client.getNom()%> <%=StringUtil.getValueOrEmpty(client.getPrenom())%></b>"
+				+ "<a href='javascript:' wact='<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>' params='tp=cli' targetDiv='left-div' style='font-size: 17px;margin-left: 2px;'><i class='fa fa-times' style='color: red;'></i></a> | "; 
+				$("#div_client_cmd").html(clientStr);
+		<%} else if(CURRENT_COMMANDE.getOpc_employe() != null){ 
+			// Employ�
+			EmployePersistant employe = CURRENT_COMMANDE.getOpc_employe();%>
+			var employeStr = "<i class='fa fa-user' style='color:black;'></i><b> <%=employe.getNom()%> <%=StringUtil.getValueOrEmpty(employe.getPrenom())%></b>"
+				+ "<a href='javascript:' wact='<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>' params='tp=empl' targetDiv='left-div' style='font-size: 17px;margin-left: 2px;'><i class='fa fa-times' style='color: red;'></i></a> | "; 
+				$("#div_client_cmd").html(employeStr);
+		<%}
+		
+		if(CURRENT_COMMANDE.getOpc_livreurU() != null){ 
+			// Employé
+			UserPersistant livreur = CURRENT_COMMANDE.getOpc_livreurU();%>
+			var employeStr = "<i class='fa fa-car' style='color:black;'></i><b> <%=livreur.getLogin()%></b>"
+				+ "<a href='javascript:' wact='<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>' params='tp=livr' targetDiv='left-div' style='font-size: 17px;margin-left: 2px;'><i class='fa fa-times' style='color: red;'></i></a> | "; 
+				$("#div_livreur").html(employeStr);
+				
+		<%} else if(CURRENT_COMMANDE.getOpc_societe_livr() != null){ 
+			// Société livraison
+			SocieteLivrPersistant socLivr = CURRENT_COMMANDE.getOpc_societe_livr();%>
+			var socLivrStr = "<i class='fa fa-car' style='color:black;'></i><b> <%=socLivr.getNom()%></b>"
+				+ "<a href='javascript:' wact='<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>' params='tp=socLivr' targetDiv='left-div' style='font-size: 17px;margin-left: 2px;'><i class='fa fa-times' style='color: red;'></i></a> | "; 
+				$("#div_livreur").html(socLivrStr);
+		<%}
+		if(CURRENT_COMMANDE.getOpc_serveur() != null){ 
+			// Société livraison
+			UserPersistant serv = CURRENT_COMMANDE.getOpc_serveur();%>
+			var servStr = "<i class='fa fa-table' style='color:black;'></i><b> <%=serv.getLogin()%></b>"
+				+ "<a href='javascript:' wact='<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.resetElement")%>' params='tp=serv' targetDiv='left-div' style='font-size: 17px;margin-left: 2px;'><i class='fa fa-times' style='color: red;'></i></a> | "; 
+				$("#div_serveur").html(servStr);
+		<%}
+	}%>
+		
+		<%// Gestion mise en attente (aussi dans right bloc)
+		if(CURRENT_COMMANDE == null || StringUtil.isEmpty(CURRENT_COMMANDE.getType_commande())){%>
+			$("#att_pop_lnk").show();
+			$("#att_std_lnk").hide();
+		<%} else{%>
+			$("#att_pop_lnk").hide();
+			$("#att_std_lnk").show();
+		<%}%>
+		
+		$("#paiement_partiel_lnk").click(function(){
+			$("input[id^='checkcli_'], input[id^='checktab_']").prop("checked", false).toggle(1000);
+		});
+		
+		$(".lnk_mnu").click(function(){
+			var mnuTr = $(".mnu_"+$(this).attr("mnu"));
+			//
+			if($(this).find("i").attr("class") == "fa fa-plus"){
+				$(this).find("i").attr("class", "fa fa-minus");
+				mnuTr.find(".span_mtt_art").show();
+				mnuTr.find(".span_mtt_mnu").hide();
+			} else{
+				$(this).find("i").attr("class", "fa fa-plus");
+				mnuTr.find(".span_mtt_art").hide();
+				mnuTr.find(".span_mtt_mnu").show();
+			}
+			
+			$("tr[id='tr_"+$(this).attr("mnu")+"']").toggle();
+		});
+		
+		$('#annul_cmd').click(function(){
+			<%if(isConfirmDelCmd && CURRENT_COMMANDE.getId() != null && !CURRENT_COMMANDE.getLast_statut().equals(ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM.TEMP.toString())){%>
+				$("#del-cmd-lnk").attr("params", "tp=annul").trigger("click");
+			<%} else{%>
+				showConfirmDeleteBox($(this).attr("act"), "", $("#targ_link"), "Cette commande sera annul&eacute;e.<br>Voulez-vous confirmer ?", null, "Annulation commande");
+			<%}%>
+		});
+		
+		
+		// Commande
+		var widowHeight = $(window).height();
+		var ratioArray = getWindowRatioZoom();
+		widowHeight = parseInt(widowHeight+(widowHeight/ratioArray[1]));
+		
+		$("#left-div").css("height", (widowHeight-103)+"px");
+		$("#div_detail_cmds").css("height", (widowHeight-103)+"px");
+		
+		//Scroll
+		var selectedTr = $('#cmd-table tr[isSel]');
+		if(selectedTr && selectedTr.length > 0){
+			selectedTr.get(0).scrollIntoView();
+		}
+		<%// List growl message
+		List<GrowlMessageBean> listGrowlMessage = MessageService.getListGrowlMessageBean();
+		if((listGrowlMessage != null) && (listGrowlMessage.size() > 0)){
+			for(GrowlMessageBean growlBean : listGrowlMessage) {%>
+				showPostAlert("<%=growlBean.getTitle()%>", "<%=growlBean.getMessage()%>" , "<%=growlBean.getType().toString()%>");
+			<%}
+		}
+		MessageService.clearMessages();%>
+		
+		<%if(request.getAttribute("NXT_STEP") != null){%>
+		$("#btn-wizard-next").trigger("click");
+	<%} else if(request.getAttribute("UP_MNU") != null){%>
+		$("#up_btn").attr("params", 'up=<%=request.getAttribute("UP_MNU")%>').show().trigger("click");
+		$("#up_btn").removeAttr("params");
+	<%}%>
+		<%if(request.getAttribute("PAGE_JS") != null){%> 
+			<%=request.getAttribute("PAGE_JS")%>
+		<%}%>
+		//
+		clearClac();
+		
+		
+		<%if(request.getAttribute("mtt_rendu_partiel") != null){%>
+			buildErrorDialog("<span class='succes' style='font-size: 24px;margin-top: 50px;'>A rendre : <strong style='color:green;'><%=request.getAttribute("mtt_rendu_partiel")%></strong> Dhs</span>", "Paiement partiel de la commande");
+		<%}%>
+		<%
+		if(isConfirmDelRow && CURRENT_COMMANDE.getId() != null 
+				&& !CURRENT_COMMANDE.getLast_statut().equals(ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM.TEMP.toString())){%>
+			$("#is_confirm_mngr").val(1);
+		<% } else{%>
+			$("#is_confirm_mngr").val(0);
+		<%} %>
+		
+		
+		<% if(ControllerUtil.getUserAttribute("LOCK_MODE", request) != null){%>
+			if(!$("#generic_modal2").is(':visible')){
+				$("#generic_modal2").modal('show');
+				submitAjaxForm('<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initQuitterLockMode")%>', '', null, null, 'generic_modal_body2');
+			}
+			 
+		<%} else if(request.getAttribute("isUnlockQuit") != null){ %>
+		 <%
+		 	String loging = "";
+	        EmployePersistant emplP = ContextGloabalAppli.getUserBean().getOpc_employe();
+	        if(emplP != null){ 
+	        	loging = StringUtil.getValueOrEmpty(emplP.getNom())+" "+StringUtil.getValueOrEmpty(emplP.getPrenom());
+	        } else{
+	        	loging = ContextGloabalAppli.getUserBean().getLogin();
+	        }
+	        %>
+		        setTimeout(function(){
+		        	$("#userConSpan").html("<%=loging%>");
+		        }, 1000);
+		<%}%>
+		
+		<% if(ControllerUtil.getUserAttribute("LOCK_MODE", request) == null){%>
+			$("#generic_modal2").modal('hide');
+		<%}%>
+	});
+
+</script>
+
+<jsp:include page="/commun/print-local.jsp" /> 

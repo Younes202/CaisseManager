@@ -1,0 +1,7 @@
+ valTypeEnum.list=Liste des valeurs
+valTypeEnum.code=Code
+valTypeEnum.libelle=Libell\u00e9
+valTypeEnum.ordre=Ordre
+valTypeEnum.code.unique.msg=Le code doit \u00eatre unique
+valTypeEnum.libelle.unique.msg=Le libell\u00e9 doit \u00eatre unique
+valEnum.opc_typenum=Type de valeur

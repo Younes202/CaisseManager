@@ -1,0 +1,195 @@
+<!-- Page Breadcrumb -->
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.STATUT_JOURNEE"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.EmployePersistant"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+
+<%
+	boolean isCaisseVerouille = ControllerUtil.getMenuAttribute("IS_CAISSE_VERROUILLE", request) != null;
+	boolean isCaisseNotFermee = (ContextAppliCaisse.getJourneeCaisseBean() != null && ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse().equals("O"));
+	boolean isJourneeCaisseOuverte = !isCaisseVerouille && isCaisseNotFermee;	
+	boolean isJourneeOuverte = (ContextAppliCaisse.getJourneeBean() != null && ContextAppliCaisse.getJourneeBean().getStatut_journee().equals("O"));
+	
+	boolean isServeur = "SERVEUR".equals(ContextAppli.getUserBean().getOpc_profile().getCode());
+	boolean isCaissier = ContextAppli.getUserBean().isInProfile("CAISSIER");
+	boolean isManager = ContextAppli.getUserBean().isInProfile("MANAGER");
+	boolean isAdmin = ContextAppli.getUserBean().isInProfile("ADMIN");
+	
+	boolean isShowHisto = StringUtil.isTrueOrNull(""+ControllerUtil.getUserAttribute("RIGHT_HISTOCAIS", request));
+%>
+
+<style>
+#lnk-mob-top a {
+	line-height: 35px;
+}
+</style>
+<div class="page-header position-relative" style="height: 50px;left: 0px;top: -0px !important;<%=StringUtil.isEmpty(CaisseWebBaseAction.GET_STYLE_CONF("PANEL_ENETETE", null))?"background-image: linear-gradient(#fbfbfb, #ddd)":"background:"+ContextGloabalAppli.getGlobalConfig("PANEL_ENETETE")%>">
+	<div class="header-title" style="padding-top: 4px;margin-left: -10px;">
+		<div class="" id="lnk-mob-top" style="float:left;float: left;padding-left: 6px;padding-top: 4px;">
+         <a class="" data-toggle="dropdown" aria-expanded="false">
+             <i class="fa fa-reorder" style="font-size: 27px;"></i>
+         </a>
+         <ul class="dropdown-menu dropdown-azure">
+         
+         <%if(isJourneeOuverte && isJourneeCaisseOuverte){ %>	
+		  		
+		  		<%if(StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CAISSE_EMPLOYE")) || StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CAISSE_CLIENT"))){ %>		
+				<li>
+					<std:linkPopup style="color:black;text-align: left;" action="caisse-web.caisseWeb.initPersonne" classStyle="btn btn-default btn-lg shiny" tooltip="Sélectionner un client ou un employé">
+						<i class="fa fa-user"></i> CLIENT/EMPLOYE
+						
+					</std:linkPopup>
+				</li>
+			<%} %>
+			<% if((!isServeur || isCaissier || isAdmin || isManager) && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CAISSE_OFFRE"))){ %>
+				<li>
+					<std:linkPopup style="color:black;text-align: left;" action="caisse-web.caisseWeb.initOffre" classStyle="btn btn-default btn-lg shiny" tooltip="Appliquer une réduction">
+						<i class="fa fa-gift"></i> OFFRES
+					</std:linkPopup>
+				</li>
+			<%} %>
+      				
+          <%if(isShowHisto){ %>
+          <li>  
+          	<a class="btn btn-default btn-lg shiny" targetDiv="right-div" style="color:black;text-align:left;" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initHistorique")%>" params="isrp=0" href="javascript:void(0);" title="Historique des commandes">
+          		<i class="fa fa-history"></i> HISTORIQUE COMMANDES
+          	</a>
+          </li>
+          <%} %>
+		  <li>
+	       	 <std:link targetDiv="right-div" params="is_ref=1&tp=pre" classStyle="btn btn-default btn-lg shiny" style="color:fuchsia;text-align:left;" action="caisse-web.presentoire.loadCommande">
+	        	<i class="fa fa-desktop"></i>SUIVI COMMANDES
+	          </std:link>
+	       </li>
+           <li> 
+           	<std:linkPopup classStyle="btn btn-default btn-lg shiny" style="color:#202722;text-align:left;" action="caisse-web.caisseWeb.loadCalc" icon="fa fa-calculator" value="CALCULATRICE" />
+           </li>
+            <li>
+              <std:linkPopup classStyle="btn btn-default btn-lg shiny" style="color:#007bd5;text-align:left;" action="caisse-web.caisseWeb.init_opts" tooltip="Ajouter un article">
+					<i class="fa fa-gears"></i> OPTIONS 
+				</std:linkPopup>
+		  	</li> 
+		 	
+		 	<%if((!isServeur || isCaissier || isAdmin || isManager) && StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("RIGHT_CLOSE_SHIFT"))){ %>					  	 
+           <li>  
+               <a style="color:green;text-align: left;" class="btn btn-default btn-lg shiny" targetdiv="generic_modal_body" data-toggle="modal" data-target="#generic_modal" wact="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.initShift")%>" title="Shift" href="javascript:void(0);"><i class="fa fa-pie-chart"></i> SHIFT</a>
+           </li>
+             <%} %> 
+              <!-- Annulation -->
+              <li>
+					<std:linkPopup id="annul_cmd_Pop" style="color:red;text-align: left;display: none;" classStyle="btn btn-default btn-lg shiny" action="caisse-web.caisseWeb.loadConfirmAnnule" params="tp=cmd" tooltip="Annuler la commande"> 
+						<i style="font-size: 18px;" class="fa fa-times"></i> ANNULER
+					</std:linkPopup>
+				
+					<a id="annul_cmd_main" style="color:red;text-align: left;display: none;" act="<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.annulerCommande")%>" targetDiv="right-div" class="btn btn-default btn-lg shiny" title="Annuler la commande">
+						 <i class="fa fa-times"></i> ANNULER
+					</a>
+			  </li>
+		  
+              <% if(isCaisseNotFermee && !request.getHeader("User-Agent").contains("Mobi")) {%>  
+			        <c:set var="isCaisseV" value="<%=isCaisseVerouille%>" />
+			        <li> 
+			        	<std:link classStyle="btn btn-default btn-lg shiny" id='${isCaisseV ?  "delock_lnk":"lock_lnk"}' style='text-align: left;color:${isCaisseV ?  "black":"#ff9800"};' targetDiv="right-div" icon='fa-3x fa ${isCaisseV ?  "fa-unlock":"fa-lock"}' value='${isCaisseV ?  "Dé-verrouiller":"Verrouiller"}' />
+			        </li>
+			    <%} %>    
+           <%} %>          
+         <%if(!isCaisseVerouille){ %>	
+         <li>
+         	<std:link classStyle="btn btn-default btn-lg shiny" id="delog_lnk" style="color: #b4003d;text-align: left;font-weight: bold;" targetDiv="right-div" icon="fa-3x fa-sign-out" tooltip="Quitter" value="DÉCONNEXION"/>
+         </li>
+    <%} %>	
+             </ul>
+           </div>
+                       
+          <div style="font-size: 10px;margin-left: 49px;">
+             <span style="margin-right: 20px;">
+	        	<i class="fa fa-street-view" style="color: red;"></i>
+		        <%
+		        EmployePersistant emplP = ContextAppli.getUserBean().getOpc_employe();
+		        if(emplP != null){ %>
+		        	<%=StringUtil.getValueOrEmpty(emplP.getNom())%> <%=StringUtil.getValueOrEmpty(emplP.getPrenom())%>
+		        <% }%>
+	        	</span>
+                        <br>
+                        
+                        <span style="color:green;" >
+         	<i class="fa fa-calendar" style="color: green;"></i>
+	         <%
+	         	if(ContextAppliCaisse.getJourneeBean() != null){
+	         %>
+	        	<%=DateUtil.dateToString(ContextAppliCaisse.getJourneeBean().getDate_journee())%>
+	         <%
+	         	}
+	         %>
+	        <%
+	        	if(ContextAppliCaisse.getJourneeBean() != null){
+	        %>
+	        	 [<%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeBean().getStatut_journee())%>]
+	        <%
+	        	} else{
+	        %>
+	        	[Fermée]
+	        <%
+	        	}
+	        %>
+        </span>
+        <br>
+        <span>
+        	<i class="fa fa-database" style="color:orange;"></i>
+        <%
+        	if(ContextAppliCaisse.getJourneeCaisseBean() != null){
+        %>
+       		 <%=ContextAppliCaisse.getCaisseBean().getReference()%> [<%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse())%>]
+       	<%
+       		 	} else{
+       		 %>
+       		<%=ContextAppliCaisse.getCaisseBean().getReference()%> [Fermée]
+       	<%} %>	 
+        </span>
+        
+                    </div>
+	
+	
+     	</div>
+     <!--Header Buttons-->
+     <div class="header-buttons">
+     		<select id="zoom_slct" style="
+     		background-color: transparent;
+     		margin-top: 5px;    
+     		margin-top: 2px;
+	    height: 48px;
+	    padding: 0px;
+	    font-size: 11px;">
+     			<option value="1">100%</option>
+     			<option value="0.9">90%</option>
+     			<option value="0.85">85%</option>
+     			<option value="0.8">80%</option>
+     			<option value="0.75">75%</option>
+     			<option value="0.7">70%</option>
+     			<option value="0.6">60%</option>
+     			<option value="0.5">50%</option>
+     		</select>
+     
+     <a class="refresh" id="refresh-toggler" href="javascript:" onclick="location.reload();" style="height: 47px;">
+         <i class="glyphicon glyphicon-refresh" style="color: #989595;"></i>
+     </a>
+<%--      <% if(!request.getHeader("User-Agent").contains("Mobi")) {%> --%>
+     <a class="fullscreen" id="fullscreen-toggler" href="javascript:" style="height: 47px;">
+         <i class="glyphicon glyphicon-fullscreen"></i>
+     </a>
+<%--      <%} %> --%>
+ </div>                          
+ 
+ 
+     <!--Header Buttons End-->
+ </div>
+ <!-- /Page Header -->

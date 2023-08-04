@@ -1,0 +1,15 @@
+caisseMouvement.opc_client=Client
+caisseMouvement.opc_employe=Employe
+caisseMouvement.opc_mouvement=N\u00b0 bon livraison
+caisseMouvement.ref_commande=R\u00e9f\u00e9rence
+caisseMouvement.is_cuisine=Is cuisine
+caisseMouvement.taux_reduction=Taux de r\u00e9duction
+caisseMouvement.mtt_donne=Montant donn\u00e9
+caisseMouvement.nbr_article=Nombre d'article
+caisseMouvement.mtt_commande=Montant commande
+caisseMouvement.mtt_commande_net=Montant net
+caisseMouvement.mtt_reduction=Montant r\u00e9duction
+caisseMouvement.type_commande=Type de commande
+caisseMouvement.mode_paiement=Mode de paiement
+caisseMouvement.date_vente=Date de vente
+caisseMouvement.list=Liste des mouvements caisse

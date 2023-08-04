@@ -1,0 +1,15 @@
+package appli.model.domaine.administration.service.impl;
+
+import javax.inject.Named;
+
+import appli.controller.domaine.administration.bean.MessageBean;
+import appli.model.domaine.administration.service.IMessageService;
+import appli.model.domaine.administration.validator.ClientValidator;
+import framework.model.common.annotation.validator.WorkModelClassValidator;
+import framework.model.service.GenericJpaService;
+
+@WorkModelClassValidator(validator=ClientValidator.class)
+@Named
+public class MessageService extends GenericJpaService<MessageBean, Long> implements IMessageService {
+
+}

@@ -1,0 +1,1886 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<taglib version="2.0" xmlns="http://java.sun.com/xml/ns/j2ee"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-jsptaglibrary_2_0.xsd">
+	<description>Standard components</description>
+	<display-name>standard</display-name>
+	<tlib-version>1.0</tlib-version>
+	<short-name>std</short-name>
+	<uri>http://www.customtaglib.com/standard</uri>
+	<!--
+		******************************************** Form
+		*****************************************************
+	-->
+	<tag>
+		<name>form</name>
+		<tag-class>framework.component.Form</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>target</name>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+		</attribute>		
+	</tag>
+	<!--
+		******************************************** Text
+		*****************************************************
+	-->
+	<tag>
+		<name>text</name>
+		<tag-class>framework.component.text.Text</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autocomplete</name>
+		</attribute>
+		<attribute>
+			<name>placeholder</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholderKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>readOnly</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>size</name>
+
+		</attribute>
+		<attribute>
+			<description>Title|content ("|" is a separator)</description>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>maxlength</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>minlength</name>
+
+		</attribute>
+		<attribute>
+			<description>Available validators : alpha - alphanum - email</description>
+			<name>validator</name>
+
+		</attribute>
+		<attribute>
+			<description>Types can be used : long - decimal - string - boolean - date</description>
+			<name>type</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>max</name>
+
+		</attribute>
+		<attribute>
+			<name>min</name>
+
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>iskey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+<!-- 		<attribute> -->
+<!-- 			<name>autoValue</name> -->
+
+<!-- 		</attribute> -->
+<!-- 		<attribute> -->
+<!-- 			<name>grouped</name> -->
+
+<!-- 		</attribute> -->
+<!-- 		<attribute> -->
+<!-- 			<description>If false : name of hidden backId is xxxx.id. Example if name field is activite.intitule -->
+<!-- 				the hidden field name is activite.id -->
+<!-- 				If true or empty the hidden field name is activite.intitule_id -->
+<!-- 				</description> -->
+<!-- 			<name>preventId</name> -->
+
+<!-- 		</attribute> -->
+		<attribute>
+			<description>
+			 a - Represents an alpha character (A-Z,a-z)!
+     		 9 - Represents a numeric character (0-9)!
+		     * - Represents an alphanumeric character (A-Z,a-z,0-9)!
+		      Example of pattern :
+		      99/99/9999
+		      (999) 999-9999
+		      (999) 999-9999? x99999
+		      99-9999999
+		      999-99-9999
+		      a*-999-a999
+		      ~9.99 ~9.99 999
+		      See more documentation at http://digitalbush.com/projects/masked-input-plugin/
+			 </description>
+			<name>mask</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<tag>
+		<name>password</name>
+		<tag-class>framework.component.text.Password</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholder</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholderKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>readOnly</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>size</name>
+
+		</attribute>
+		<attribute>
+			<description>Title|content ("|" is a separator)</description>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>maxlength</name>
+
+		</attribute>
+		<attribute>
+			<name>minlength</name>
+
+		</attribute>
+		<attribute>
+			<description>Available validators : alpha - alphanum - email</description>
+			<name>validator</name>
+
+		</attribute>
+		<attribute>
+			<description>Types can be used : long - decimal - string - boolean - date</description>
+			<name>type</name>
+			<required>true</required>
+
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!-- ******************************************** Area *****************************************************-->
+	<tag>
+		<name>textarea</name>
+		<tag-class>framework.component.text.TextArea</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+				<attribute>
+			<name>placeholder</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholderKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>readOnly</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>rows</name>
+		</attribute>
+		<attribute>
+			<name>cols</name>
+		</attribute>
+		<attribute>
+			<name>maxlength</name>
+		</attribute>
+		<attribute>
+			<name>iskey</name>
+		</attribute>		
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+
+		</attribute>
+		<attribute>
+			<name>grouped</name>
+
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!-- ******************************************** Rich Area *****************************************************-->
+	<tag>
+		<name>textarea-rich</name>
+		<tag-class>framework.component.text.TextAreaRich</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>readOnly</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>height</name>
+		</attribute>
+		<attribute>
+			<name>width</name>
+		</attribute>
+		<attribute>
+			<name>maxlength</name>
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+		</attribute>
+		<attribute>
+			<name>grouped</name>
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>			
+		</attribute>
+	</tag>
+	
+	<!--
+		******************************************** Button
+		*****************************************************
+	-->
+	<tag>
+		<name>button</name>
+		<tag-class>framework.component.action.Button</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onComplete</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noJsValidate</name>
+		</attribute>
+		<attribute>
+			<description>Close popup on submit and no error</description>
+			<name>closeOnSubmit</name>
+		</attribute>	
+		<attribute>
+			<name>workId</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>params</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>targetDiv</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>D : delete, M : merge, U : update</description>
+			<name>actionGroup</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>icon</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>name</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>disable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>action</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>valueKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** Checkbox
+		*****************************************************
+	-->
+	<tag>
+		<name>checkbox</name>
+		<tag-class>framework.component.box.CheckBox</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>disable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>true or false</description>
+			<name>checked</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+		</attribute>
+		<attribute>
+			<name>grouped</name>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** Radios
+		*****************************************************
+	-->
+	<tag>
+		<name>radioGroup</name>
+		<tag-class>framework.component.box.RadioGroup</tag-class> 
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+
+		</attribute>
+		<attribute>
+			<name>grouped</name>
+
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>validator</name>
+
+		</attribute>
+		<attribute>
+			<description>Types can be used : long - decimal - string - boolean - date</description>
+			<name>type</name>
+			<required>true</required>
+
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** Radio
+		*****************************************************
+	-->
+	<tag>
+		<name>radio</name>
+		<tag-class>framework.component.box.RadioButton</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>label</name> 
+			<rtexprvalue>true</rtexprvalue> 
+		</attribute>
+		<attribute>
+			<name>labelKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>value : left or right</description>
+			<name>labelPosition</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>disable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+			<rtexprvalue>true</rtexprvalue> 
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>size</name>
+		</attribute>
+		<attribute>
+			<name>checked</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+<!-- 		<attribute> -->
+<!-- 			<name>label</name> -->
+<!-- 			<rtexprvalue>true</rtexprvalue> -->
+<!-- 		</attribute> -->
+<!-- 		<attribute> -->
+<!-- 			<name>labelKey</name> -->
+<!-- 			<rtexprvalue>true</rtexprvalue> -->
+<!-- 		</attribute> -->
+	</tag>
+	<!--
+		******************************************** Select
+		*****************************************************
+	-->
+	<tag>
+		<name>select</name>
+		<tag-class>framework.component.box.Select</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Add blank item : Default true</description>
+			<name>addBlank</name>
+		</attribute>
+		<attribute>
+			<name>placeholder</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholderKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>disable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+		    <description>Si à oui alors les données seront affichées sous forme d'arborescence. Il faut les attributs b_left et b_right dans l'objet</description>
+			<name>isTree</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>groupKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>groupLabels</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Labels separated by ; If you want add a separator between labels, yous can write expression like this : 
+			label1;' - ';label2 or label1;' :-> ';label2 </description>
+			<name>labels</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>key</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Fields separated by ;    return values separated by |</description>
+			<name>hiddenkey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>size</name>
+
+		</attribute>
+		<attribute>
+			<name>width</name>
+
+		</attribute>
+		<attribute>
+			<name>multiple</name>
+
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>data</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+
+		</attribute>
+		<attribute>
+			<description>Type of select. Values possible :
+				- write or empty mode : writable select
+				- std : standard select
+				- free : no auto body
+			</description>
+			<name>mode</name>
+		</attribute>
+		<attribute>
+			<name>validator</name>
+		</attribute>
+		<attribute>
+			<description>Types can be used : long - decimal - string - boolean - date or long[], decimal[], ...</description>
+			<name>type</name>
+			<required>true</required>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** Link
+		*****************************************************
+	-->
+	<tag>
+		<name>link</name>
+		<tag-class>framework.component.action.Link</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onComplete</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noJsValidate</name>
+		</attribute>	
+		<attribute>
+			<description>Close popup on submit and no error</description>
+			<name>closeOnSubmit</name>
+		</attribute>
+		<attribute>
+			<name>workId</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>targetDiv</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>params</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force show link</description>
+			<name>forceShow</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>D : delete, C : create, U : update, S : select, CR : CUD (all)</description>
+			<name>actionGroup</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>icon</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>valueKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>action</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>target</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>		
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+	</tag>
+	<tag>
+		<name>linkPopup</name>
+		<tag-class>framework.component.action.LinkPopup</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>workId</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onComplete</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noJsValidate</name>
+		</attribute>
+		<attribute>
+			<name>madalTarger</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>	
+		<attribute>
+			<name>params</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>D : delete, C : create, U : update, S : select, CR : CUD (all)</description>
+			<name>actionGroup</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>icon</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>valueKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>action</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+	</tag>
+	
+	<!--
+		******************************************** Date
+		*****************************************************
+	-->
+	<tag>
+		<name>date</name>
+		<tag-class>framework.component.text.Date</tag-class>
+		<body-content>JSP</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Force field to be opened if form is read only</description>
+			<name>forceWriten</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>			
+		<attribute>
+			<name>readOnly</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+				<attribute>
+			<name>placeholder</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>placeholderKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+		</attribute>
+		<attribute>
+			<name>style</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>size</name>
+
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<attribute>
+			<name>onSelect</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>required</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>noDisable</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>pattern</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>autoValue</name>
+
+		</attribute>
+		<attribute>
+			<name>grouped</name>
+
+		</attribute>
+		<attribute>
+			<description>Restrict the range of selectable dates with the minDate and maxDate options. Set the beginning and end dates as actual dates (new Date(2009, 1 - 1, 26)), as a numeric offset from today (-20), or as a string of periods and units ('+1M +10D'). For the last, use 'D' for days, 'W' for weeks, 'M' for months, or 'Y' for years.</description>
+			<name>dateMax</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Restrict the range of selectable dates with the minDate and maxDate options. Set the beginning and end dates as actual dates (new Date(2009, 1 - 1, 26)), as a numeric offset from today (-20), or as a string of periods and units ('+1M +10D'). For the last, use 'D' for days, 'W' for weeks, 'M' for months, or 'Y' for years.</description>
+			<name>dateMin</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!-- ******************************************** Label
+		*****************************************************
+	-->
+	<tag>
+		<name>label</name>
+		<tag-class>framework.component.text.Label</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>classStyle</name>
+			<rtexprvalue>true</rtexprvalue> 
+		</attribute>
+		<attribute>
+			<name>style</name>
+
+		</attribute>
+		<attribute>
+			<name>tooltip</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>tooltipKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<!-- ****************Events******************* -->
+		<attribute>
+			<name>onClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onBlur</name>
+
+		</attribute>
+		<attribute>
+			<name>onChange</name>
+
+		</attribute>
+		<attribute>
+			<name>onDbClick</name>
+
+		</attribute>
+		<attribute>
+			<name>onFocus</name>
+
+		</attribute>
+		<!-- ****************Key Event******************* -->
+		<attribute>
+			<name>onKeyDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyPress</name>
+
+		</attribute>
+		<attribute>
+			<name>onKeyUp</name>
+
+		</attribute>
+		<!-- ****************Mouse Event******************* -->
+		<attribute>
+			<name>onMouseDown</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseMove</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOut</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseOver</name>
+
+		</attribute>
+		<attribute>
+			<name>onMouseUp</name>
+
+		</attribute>
+		<!-- ****************Added attributes******************* -->
+		<attribute>
+			<name>valueKey</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Add separator after label : true or false</description>
+			<name>addSeparator</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** Dialog box
+		*****************************************************
+	-->
+	<tag>
+		<name>dialogBox</name>
+		<tag-class>framework.component.box.DialogBoxAutoOpen</tag-class>
+		<body-content>empty</body-content>
+	</tag>
+	<!-- ******************************************** Upload file
+		*****************************************************
+	-->
+	<tag>
+		<name>upload</name>
+		<tag-class>framework.component.Upload</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Allowed extensions example : "txt,png,mp3,avi"</description>
+			<name>extensions</name>
+
+		</attribute>
+		<attribute>
+			<name>maxConnection</name>
+
+		</attribute>
+		<attribute>
+			<name>multipleSelection</name>
+		</attribute>
+		<attribute>
+			<name>maxSize</name>
+		</attribute>
+		<attribute>
+			<name>minSize</name>
+		</attribute>
+		<attribute>
+			<description>Upload one file</description>
+			<name>uniqueFile</name>
+		</attribute>
+		<attribute>
+			<description>Link to call when the element is clicked</description>
+			<name>linkAction</name>
+		</attribute>
+	</tag>
+	<!--
+		******************************************** UplField Set
+		*****************************************************
+	-->
+	<tag>
+		<name>tooltip</name>
+		<tag-class>framework.component.Tooltip</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+		   <name>name</name>
+		   <rtexprvalue>true</rtexprvalue>
+		 </attribute>
+		<attribute>
+			<description>True = Tooltip is fixed</description>
+			<name>sticky</name>
+		</attribute>
+		<attribute>
+			<description>Force show tooltip</description>
+			<name>forceShow</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>helpPath</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>The width of the clueTip</description>
+			<name>width</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>The height of the clueTip</description>
+			<name>height</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>close when clueTip is moused out</description>
+			<name>mouseOutClose</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>if true, clueTip will track mouse movement</description>
+			<name>tracking</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>close clueTip on a timed delay</description>
+			<name>delayedClose</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>contentKey</name>
+		</attribute>
+		<attribute>
+			<name>content</name>
+		</attribute>
+		<attribute>
+			<name>title</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>titleKey</name>
+		</attribute>
+		<attribute>
+			<description>super, sub, baseline, inherit, text-bottom, bottom, middle, text-top, top. Default value : middle</description>
+			<name>imgVAlign</name>
+		</attribute>
+	</tag>
+
+
+	<!--******************************************** Ajax*****************************************************-->
+	<tag>
+		<name>ajax</name>
+		<tag-class>framework.component.Ajax</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<description>Event triggering ajax : blur, change, click, dblclick, focus, hover, keydown
+				keypress, keyup, mousedown, mouseenter, mouseleave, mousemove, mouseout, mouseover, mouseup
+			</description>
+		   <name>event</name>
+		   <required>true</required>
+		   <rtexprvalue>true</rtexprvalue>
+		 </attribute>
+		<attribute>
+			<description>Target to render. Ids separated by ;</description>
+			<name>target</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Use if target is one input field. Action must write in response. Default false</description>
+			<name>isInput</name>
+		</attribute>
+		<attribute>
+			<description>Action to call. Default work_refresh</description>
+			<name>action</name>
+		</attribute>
+		<attribute>
+			<name>params</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<description>Skip init action in controller : default true</description>
+			<name>skipInit</name>
+		</attribute>
+		<attribute>
+			<description>Skip post action in controller : default true</description>
+			<name>skipPost</name>
+		</attribute>
+	</tag>
+	
+	<tag>
+		<name>hidden</name>
+		<tag-class>framework.component.text.Hidden</tag-class>
+		<body-content>empty</body-content>
+		<attribute>
+			<name>id</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>name</name>
+			<required>true</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>value</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		<attribute>
+			<name>iskey</name>
+		</attribute>	
+		<attribute>
+			<description>Default : false. if true then it functions like basic hidden without auto value</description>
+			<name>basic</name>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>			
+	</tag>	
+	
+</taglib>

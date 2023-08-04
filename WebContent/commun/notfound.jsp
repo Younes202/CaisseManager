@@ -1,0 +1,3 @@
+<div style="color: red;">
+	<i class="fa fa-cogs" style="padding: 20px;font-size: 43px;"></i> ...
+</div>

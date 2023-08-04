@@ -1,0 +1,319 @@
+package appli.model.domaine.administration.service.impl;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Scanner;
+import java.util.concurrent.Future;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.mail.Message;
+import javax.mail.PasswordAuthentication;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.EntityTransaction;
+import javax.persistence.PersistenceUnit;
+
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.AsyncResult;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.model.domaine.administration.dao.IUserDao;
+import appli.model.domaine.administration.persistant.MailQueuePersistant;
+import appli.model.domaine.administration.service.IMailUtilService;
+import framework.model.common.spring.ApplicationContextHolder;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+
+@Named
+@EnableAsync
+//@ComponentScan("org.metier.domaine.util")
+public class MailUtilService implements IMailUtilService {
+//	private final static Logger LOGGER = Logger.getLogger(MailUtilService.class);
+	private static final String _SMTP_HOST = StrimUtil.getGlobalConfigPropertie("mail.smtp");
+	private static final String _PORT = StrimUtil.getGlobalConfigPropertie("mail.port");
+	private static final String _USER = StrimUtil.getGlobalConfigPropertie("mail.user");
+	private static final String _PW = StrimUtil.getGlobalConfigPropertie("mail.pw");
+	private static final String _FROM = StrimUtil.getGlobalConfigPropertie("mail.from");
+	private static final String _FROM_NO_REPLY = StrimUtil.getGlobalConfigPropertie("mail.from.noreply");
+	
+	@Inject
+	private IUserDao userDao;
+	
+	@Override
+	@Transactional
+	public void addMailToQueue(MailQueuePersistant mail){
+		EntityManager entityManager = userDao.getEntityManager();
+		
+		mail = entityManager.merge(mail);
+		entityManager.flush();
+		if(mail.getNbr_erreur() >= 3){
+			return;
+		}
+		if(mail.getDate_mail().equals(new Date()) || mail.getDate_mail().before(new Date())){
+			sendMail(mail);
+		}
+	}
+	
+	/**
+	 * @param mail
+	 * @return
+	 */
+//	@Override
+//	public boolean sendMailNoAsynch(MailQueuePersistant mail) { 
+//		boolean isEnvoye = sendMessageMail(mail);
+//	    // Maj mail -----------------------------------------------
+//		return isEnvoye;
+//	}
+	
+	@Async
+	@Transactional
+	private Future<Boolean> sendMail(MailQueuePersistant mail) {
+		boolean isEnvoye = sendMessageMail(mail);
+	         
+	    // Maj mail -----------------------------------------------
+		if(isEnvoye){
+	         mail.setDate_envoi(new Date());
+	         userDao.getEntityManager().merge(mail);
+	         
+	         return new AsyncResult<Boolean>(true);
+		} else{
+			mail.setNbr_erreur(mail.getNbr_erreur()+1);
+			userDao.getEntityManager().merge(mail);
+		}
+	    // --------------------------------------------------------
+		 return new AsyncResult<Boolean>(false);
+	}
+	
+	/**
+     * @param mail
+     * @param isFullMail
+     * @return
+     */
+    public static String getMailContent(Map<String, String> mapParams, String tp) {
+    	String mailContentFile = MailUtilService.class.getResource("/").getPath().toString() + "appli/model/domaine/util_srv/mails/";
+    	//
+    	if(tp.equals("JOURNEE")){
+    		mailContentFile += "chiffres_journee_mail.txt";
+    	} else if(tp.equals("SHIFT")){
+    		mailContentFile += "chiffres_shift_mail.txt";
+    	} else if(tp.equals("AGENDA")){
+    		mailContentFile += "generic_mail.txt";
+    	}
+        
+        StringBuilder sb = new StringBuilder();
+
+        try {
+            Scanner sc = new Scanner(new File(mailContentFile));
+            while(sc.hasNextLine()){
+                sb.append(sc.nextLine());
+            }
+            sc.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        String message = sb.toString();
+        for(String key : mapParams.keySet()){
+        	message = message.replaceAll("\\{"+key+"\\}", StringUtil.getValueOrEmpty(mapParams.get(key)));
+        }
+        
+        return message;
+    }
+    
+    @PersistenceUnit
+    EntityManagerFactory emf;
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void sendAllMails() {
+        ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor)ApplicationContextHolder.getApplicationContext().getBean("taskExecutor");
+        final Thread asynchThread = new Thread(new Runnable() {
+        	public void run() {
+                  EntityManager entityManager = emf.createEntityManager();
+                  List<MailQueuePersistant> listMail = null;
+                  EntityTransaction transaction = entityManager.getTransaction();
+				try {
+                   transaction.begin();
+                    // Envoi des mail en atttente dans la queu
+                    listMail = entityManager.createQuery("from MailQueuePersistant mq where "
+                    		+ " mq.date_envoi is null "
+                    		+ " and mq.nbr_erreur <= 3"// Moins de 3 tentatives
+                            + " and mq.date_mail <=:dateJour")
+                    	.setParameter("dateJour", new Date()).getResultList();
+                    for (MailQueuePersistant mqP : listMail) {
+                        boolean isEnvoye = sendMessageMail(mqP);
+                        // Maj mail -----------------------------------------------
+                        if(isEnvoye){
+                            mqP.setDate_envoi(new Date());
+                        } else {
+                        	mqP.setNbr_erreur(mqP.getNbr_erreur()+1);
+                        }
+                        
+                        entityManager.merge(mqP);
+                      }
+                  } catch(Exception e) {
+                	  transaction.rollback();
+                      e.printStackTrace();
+                  } finally {
+                      if(listMail != null && listMail.size() > 0) {
+                          transaction.commit();
+                      }
+                      entityManager.close();
+                  }
+              }
+        });
+        taskExecutor.execute(asynchThread);
+    }
+	
+	/**
+	 * @param mail
+	 * @return
+	 */
+	@Override
+	public boolean sendMessageMail(MailQueuePersistant mail){
+		// Pas d'envoi en DEV
+//		if("DEV".equals(StrimUtil.getGlobalConfigPropertie("project.env"))){
+//			return true;
+//		}
+		
+		String copro_destinataires = mail.getDestinataires();
+		String[] dests = StringUtil.getArrayFromStringDelim(copro_destinataires, ";");
+		if(dests == null || dests.length == 0){
+			return true; 
+		}
+		
+		 try{
+		      // Get system properties
+		      Properties properties = new Properties();
+	
+		      // Setup mail server
+		      //properties.put("mail.smtp.user", _USER);
+		      //properties.put("mail.smtp.password", _PW);
+		      
+		      properties.put("mail.smtp.auth", "true");
+		      properties.put("mail.smtp.host", _SMTP_HOST);
+		      properties.put("mail.smtp.port", _PORT);
+		      
+//		      properties.put("mail.debug", "true");
+
+//		      properties.put("mail.smtp.socketFactory.port", _PORT);
+//		      properties.setProperty("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+//              properties.setProperty("mail.smtp.socketFactory.fallback", "javax.net.ssl.SSLSocketFactory");
+              
+	    	String hostLower = _SMTP_HOST.toLowerCase();
+			if(hostLower.indexOf("gmail") != -1){
+		    	  properties.put("mail.smtp.starttls.enable", "true"); //TLS
+		    	  properties.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+		    	  
+		      } else if(hostLower.indexOf("office") != -1 || hostLower.indexOf("outlook") != -1){
+		    	  properties.put("mail.smtp.starttls.enable", "true"); //TLS
+		    	  properties.put("mail.smtp.ssl.trust", "smtp.office365.com");
+		      }
+	    	  
+	    	  
+              properties.put("mail.smtp.connectiontimeout", "30000"); //connection time out in milliseconds
+              properties.put("mail.smtp.timeout", "30000"); //IO time out in milliseconds 
+		      
+		      // Get the default Session object.
+		     // Session session = Session.getDefaultInstance(properties, null);
+                Session session = Session.getInstance(properties,
+              		  new javax.mail.Authenticator() {
+              			protected PasswordAuthentication getPasswordAuthentication() {
+              				return new PasswordAuthentication(_USER, _PW); 
+              			}
+              		  });
+		      //-------------------------
+		   // Pop Authenticate yourself
+		    //  Store store = session.getStore("pop3");
+		    //  store.connect(_POP_HOST, _USER, _PW);
+		      //-------------------------
+		      
+             String nomExpediteur = mail.getExpediteur_nom();
+                
+	         // Create a default MimeMessage object.
+	         MimeMessage message = new MimeMessage(session);
+	         // Set From: header field of the header.
+	         message.setFrom(new InternetAddress(_FROM_NO_REPLY, nomExpediteur));
+	         
+	         // Set To: header field of the header.
+	        for(String mailDest : dests){
+	        	message.addRecipient(Message.RecipientType.TO, new InternetAddress(mailDest));
+	        }
+//			message.addRecipient(Message.RecipientType.TO, new InternetAddress(copro_destinataires));
+			
+	         // Set Subject: header field
+	        String sujet = mail.getSujet();
+	        message.setSentDate(new Date());
+	         
+	        sujet = sujet.replaceAll("é", "&eacute;")
+ 					.replaceAll("è", "&egrave;")
+ 					.replaceAll("à", "&agrave;")
+ 					.replaceAll("€", "&euro;")
+ 					.replaceAll("ê", "&ecirc;")
+	        		.replaceAll("°", "&deg;")
+	        		.replaceAll("À", "&Agrave;")
+	        		.replaceAll("É", "&Eacute;");
+
+	        String messageMail = mail.getMessage().replaceAll("é", "&eacute;")
+ 					.replaceAll("è", "&egrave;")
+ 					.replaceAll("à", "&agrave;")
+ 					.replaceAll("€", "&euro;")
+ 					.replaceAll("ê", "&ecirc;")
+	        		.replaceAll("°", "&deg;")
+	        		.replaceAll("À", "&Agrave;")
+	        		.replaceAll("É", "&Eacute;");
+	        
+	         // -----------------------------------------------------------------
+	        MimeMultipart globalMultipart = new MimeMultipart();
+	        
+	        MimeBodyPart contentMsg = new MimeBodyPart(); 
+	        
+	        message.setSubject(sujet);
+	        contentMsg.setContent(messageMail, "text/html");
+	        
+	        globalMultipart.addBodyPart(contentMsg);
+	        
+//		 	if(mail.getPieces_path() != null){
+//		 	 	String attachementPth = BASE_PATH + "/" + ContextAppli.getAbonementBean().getId()+"/" + ContextAppli.getEtablissementBean().getId() + "/" + mail.getPieces_path();
+//		 		File folder = new File(attachementPth);
+//		 		
+//				if(folder.listFiles() != null){
+//					for (final File file : folder.listFiles()) {
+//						DataSource source = new FileDataSource(file);
+//						BodyPart pieceJointe = new MimeBodyPart();
+//						pieceJointe.setDataHandler(new DataHandler(source))  ;
+//						pieceJointe.setFileName(source.getName());
+//						
+//						globalMultipart.addBodyPart(pieceJointe);
+//					}
+//				}
+//	          } 
+	         //-------------------------------
+	         
+	         // Now set the actual message
+	        // message.setText(text);
+		 	 message.setContent(globalMultipart); 
+		 	
+	         // Send message
+	         Transport.send(message);
+	         
+	         return true;
+	      } catch (Exception e) {
+	    	  System.out.println(e.getMessage());
+	      }
+		 
+		 return false;
+	}
+}

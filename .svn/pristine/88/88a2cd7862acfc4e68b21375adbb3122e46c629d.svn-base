@@ -1,0 +1,84 @@
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<style>
+#generic_modal_body{
+	width: 920px;
+	margin-left: -10%;
+}
+</style>
+
+<std:form name="data-form">
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">D&eacute;tail des articles</span>
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			<div class="row" style="margin: 0px;">
+				<table class="table table-hover table-striped table-bordered" style="font-size: 11px;">
+                     <thead class="bordered-blueberry">
+                         <tr>
+                         	 <th style="width: 40px;"></th>
+                             <th>
+                                 ARTICLE
+                             </th>
+                             <th style="width: 120px">
+                                 QUANTIE
+                             </th>
+                             <th style="width: 120px">
+                                 MONTANT
+                             </th>
+                             <th style="width: 120px">
+                                 MARGE ARTICLE
+                             </th>
+                             <th style="width: 120px">
+                                 MARGE CALCULEE
+                             </th>
+                         </tr>
+                        </thead>
+                        <tbody> 
+                         	<c:set var="cptCmd" value="1" />
+                         	
+							<c:forEach items='${listMvm }' var="caisseMvmDet">
+								<tr>
+									<td>
+										${cptCmd }
+									</td>
+									<td style="font-weight: bold;color: blue;">${caisseMvmDet.opc_article.libelle}</td>
+									<td style="font-weight:bold;" align="right"><fmt:formatDecimal value="${caisseMvmDet.quantite}"/></td>
+									<td style="font-weight:bold;" align="right"><fmt:formatDecimal value="${caisseMvmDet.mtt_total}"/></td>
+									<td style="font-weight:bold;" align="right"><fmt:formatDecimal value="${caisseMvmDet.opc_article.taux_marge_caissier}"/></td>
+									
+									<c:set var="marge" value="${ (caisseMvmDet.mtt_total*caisseMvmDet.opc_article.taux_marge_caissier)/100 }" />
+									
+									<td style="font-weight:bold;" align="right"><fmt:formatDecimal value="${marge}"/></td>
+								</tr>
+								<c:set var="cptCmd" value="${cptCmd+1 }" />  
+							</c:forEach>
+							<c:if test="${listMvm.size() == 0 }">
+								<tr align="center" class="alt" style=""><td align="center" colspan="6">- Aucun élément à afficher -</td></tr>
+							</c:if>
+						<tbody>
+					</table>
+				</div>	
+					
+				<div class="row" style="text-align: center;margin-top: 10px;">
+					<div class="col-md-12">
+						<button type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal">
+							<i class="fa fa-times"></i> Fermer
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+</std:form>
+

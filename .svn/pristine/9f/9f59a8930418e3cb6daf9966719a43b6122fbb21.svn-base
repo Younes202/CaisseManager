@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+      	http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+	    http://www.springframework.org/schema/task
+   		http://www.springframework.org/schema/task/spring-task-3.0.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/tx
+		http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/aop
+		http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+		">
+
+  	<!-- Package scan -->
+	<context:component-scan base-package="framework" />
+	<context:component-scan base-package="appli.controller" />
+	<context:component-scan base-package="appli.model" />
+
+	<!-- Task and schudeler --> 
+	<task:annotation-driven />
+	
+	<context:property-placeholder location="classpath*:/appli/conf/global-config.properties" /> 
+	
+	<bean id="dataSource" class="appli.controller.util_ctrl.CustomBasicDataSource" destroy-method="close"
+		p:driverClassName="com.mysql.cj.jdbc.Driver" 
+		
+		p:url="jdbc:mysql://${db.host}:${db.port}/${db.name}?serverTimezone=GMT&amp;characterEncoding=UTF-8"
+		p:username="${db.user}" p:password="${db.pw}"
+		
+       	p:maxIdle="40"
+		p:initialSize="5" 
+    	p:maxTotal="80"
+                        
+        p:validationQuery="select 1" 
+        p:defaultAutoCommit="false"
+	/>
+
+	<bean id="entityManagerFactory"
+		class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean"
+		p:dataSource-ref="dataSource">
+		<property name="jpaVendorAdapter">
+			<bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter"
+				p:database="MYSQL" 
+				p:databasePlatform="org.hibernate.dialect.MySQL5InnoDBDialect"
+				p:showSql="false"
+				p:generate-ddl="true" 
+				/> 
+		</property>
+	</bean>
+
+	<bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+		<property name="entityManagerFactory" ref="entityManagerFactory"/>
+		<property name="dataSource" ref="dataSource"/>
+	</bean>
+
+	<context:annotation-config />
+	<tx:annotation-driven transaction-manager="transactionManager"/>
+
+	<!-- ************************ Debut de la configuration AOP ************************** -->
+ 	<!-- <aop:aspectj-autoproxy />  -->
+ 	<aop:config>
+		<aop:pointcut id="apliModelPointcut" expression="execution(* appli.model.domaine.*.service..*(..))"/>
+		<aop:pointcut id="adminModelPointcut" expression="execution(* appli.model.admin998.service..*(..))"/>
+		<aop:pointcut id="frameworkModelPointcut" expression="execution(* framework.model.service..*.*(..))"/>
+		<aop:aspect id="modelInterceptor" ref="interceptorAspect">
+		    <!-- Appli listner -->
+		    <aop:around method="doAroundActions" pointcut-ref="apliModelPointcut"/>
+		    <aop:around method="doAroundActions" pointcut-ref="adminModelPointcut"/>
+		    <!-- Framework listner -->
+		    <aop:around method="doAroundActions" pointcut-ref="frameworkModelPointcut"/>
+		    <aop:after method="doAfterCall" pointcut-ref="frameworkModelPointcut"/>
+		    <aop:before method="doBeforCall" pointcut-ref="frameworkModelPointcut"/>
+	    </aop:aspect>
+	</aop:config>
+	<bean id="interceptorAspect" class="framework.model.util.ModelInterceptorAOP"/>
+
+	<!-- ****************** Fin de la configuration AOP *********************** -->
+	<bean id="taskExecutor"
+		class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+		<property name="corePoolSize" value="5" />
+		<property name="maxPoolSize" value="20" />
+		<property name="WaitForTasksToCompleteOnShutdown" value="true" />
+	</bean>
+	<!-- **************************************** FIn ************************************* -->
+	
+</beans>

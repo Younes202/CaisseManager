@@ -1,0 +1,342 @@
+	<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.STATUT_JOURNEE"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="appli.model.domaine.stock.service.IMouvementService"%>
+<%@page import="java.util.Map"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.EmployePersistant"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<%
+	// Purge
+ControllerUtil.cleanAll(request);
+boolean isCaisseNotFermee = (ContextAppli.getEtablissementBean() != null 
+		&& ContextAppliCaisse.getJourneeCaisseBean() != null		
+		&& "O".equals(ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse()));
+boolean isJourneeCaisseOuverte = isCaisseNotFermee;
+int WIDTH_CMD = 370;
+int HEIGHT_DETAIL = 370;
+%>	
+	
+	<script type="text/javascript">
+		function resetDetailCmd(){
+			$("#menu-detail-div").empty();
+		}
+		function manageZoom(val){
+			$("html").css("zoom", val).css("-moz-transform", "scale("+val+")").css("-moz-transform-origin", "0.0");
+		}
+		
+		$(document).ready(function (){
+			$("#zoom_slct").change(function(){
+				writeLocalStorage('zoom_caicli_cock', $(this).val());
+				refreshSize();
+			});
+			
+			<%-- Plein �cran de la partie droite --%>
+			$("#toogle-detail").click(function(){
+				if($("#right-div").attr("disp") != 'full'){
+					$("#right-div").attr("disp", 'full');
+					$("#left-div").css("display", "none");
+					$("#right-div")
+						.css("position", "fixed")
+						.css("width", "100%")
+						.css("height",  $(window).height()+"px")
+				    	.css("top", "40px")
+				    	.css("left", "0px");
+				} else{
+					$("#right-div").removeAttr("disp");
+					$("#right-div").css("position", "relative").css("top", "0px");
+					$("#left-div").css("display", "");
+					refreshSize();
+				}
+			});
+		    <%-- Plein &eacute;cran et resize --%>
+			$("#fullscreen-toggler").click(function(){
+				setTimeout(function(){
+					refreshSize();
+				}, 1000);
+			});
+
+			var doit;
+			window.onresize = function(){
+			  clearTimeout(doit);
+			  doit = setTimeout(refreshSize, 100);
+			};
+			
+			refreshSize();
+		});
+		
+		function getWindowRatioZoom(){
+			var ratioW = 1;
+			var ratioH = 1;
+			var dataZoom = readLocalStorage('zoom_caicli_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				if(dataZoom == '0.9'){
+					ratioW = 9;
+					ratioH = 9;
+				} else if(dataZoom == '0.8'){
+					ratioW = 4;
+					ratioH = 4;
+				} else if(dataZoom == '0.7'){
+					ratioW = 2.35;
+					ratioH = 2.35;
+				} else if(dataZoom == '0.6'){
+					ratioW = 1.5;
+					ratioH = 1.5;
+				} else if(dataZoom == '0.5'){
+					ratioW = 1;
+					ratioH = 1;
+				}
+			}
+			var ratioArray = [ratioW, ratioH];
+			
+			return ratioArray;
+		}
+		
+		function refreshSize(){
+			var widowHeight = $(window).height();
+			var widowWidth = $(window).width();
+			
+			var dataZoom = readLocalStorage('zoom_caicli_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				
+				var ratioArray = getWindowRatioZoom();
+				
+				widowHeight = parseInt(widowHeight+(widowHeight/ratioArray[1]));
+				widowWidth = parseInt(widowWidth+(widowWidth/ratioArray[0]));
+				//
+				$("#zoom_slct").val(dataZoom);
+			}
+			// Css
+			manageZoom(dataZoom);
+			
+			// Commande
+			$("#left-div").css("height", (widowHeight-103)+"px");
+			$("#div_detail_cmds").css("height", (widowHeight-103)+"px");
+			
+			// Menu
+			$("#menu-detail-div, #menu-left-div").css("height", (widowHeight-(<%=HEIGHT_DETAIL%>+48))+"px");
+			
+			$("#right-div").css("width", (widowWidth-(<%=WIDTH_CMD%>+5))+"px");
+			
+			$("#menu-detail-div").css("width", ($("#right-div").width()-80)+"px");
+			$("#famille-div").css("width", ($("#right-div").width()-3)+"px"); 
+		}
+		
+		<%String imgBack = null;
+		IArticleService service = (IArticleService)ServiceUtil.getBusinessBean(IArticleService.class);
+		Map<String, byte[]> dataimg = service.getDataImage(ContextAppli.getEtablissementBean().getId(), "paramFE");
+		if(dataimg.size() > 0){
+			imgBack = "data:image/jpeg;base64,"+FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue());%>
+			// Tempo pour effacer l'�cran
+			var timer = startLockTimeOut();
+			// Mise en veille de l'�cran --------------------------------------------------------
+			$(document).ajaxComplete(function(e){
+				timer = startLockTimeOut(timer);
+			});
+			//
+			$(document).off('click', '#lock_caisse_div');
+			$(document).on('click', '#lock_caisse_div', function(e){
+				$("#lock_caisse_div").hide(1000);
+				timer = startLockTimeOut(timer);
+			});
+		<%}%>
+		
+		function startLockTimeOut(timer){
+			window.clearTimeout(timer);
+			timer = window.setTimeout(function(){
+				$("#lock_caisse_div").show(1000);
+			}, 90000);
+			return timer;
+		}
+		</script>		
+
+	<style>
+		::-webkit-scrollbar {
+		    width: 3em;
+		    height: 2em
+		}
+		::-webkit-scrollbar-button {
+		    background: black;
+		    height: 30px;
+		}
+		::-webkit-scrollbar-track-piece {
+		    background: #888;
+		}
+		::-webkit-scrollbar-thumb {
+		    background: #57b5e3
+		}
+	</style>
+
+	<%if(dataimg != null){ %>
+		<div id="lock_caisse_div" style="opacity:0.9;z-index:10000;position: absolute;left: 0;top: 0;width: 100%;height: 100%;background-color: #ccc;display: none;">
+			<div style="position: absolute;right: 13px;top: 90%;width:100%;text-align: right;">
+				<img alt="Caisse manager" src="resources/<%=StrimUtil.getGlobalConfigPropertie("context.soft") %>/img/logo_caisse_red.png?v=1.7" style="height: 40px;"/>
+			</div>
+			<div style="position: absolute;height: 100%;width: 100%;text-align: center;">
+	              <img src="data:image/jpeg;base64,<%=FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue())%>" alt="Caisse manager" style="width: 350px;margin-top:20%" />                     
+	       </div>
+		</div>
+	<%} %>
+
+	<a href="javascript:" id="targ_link" targetDiv="left-div"></a>
+	<a href="javascript:" id="targ_link_pop" targetdiv="generic_modal_body" data-backdrop="static" data-keyboard="false" data-toggle="modal" data-target="#generic_modal"></a>
+	<std:linkPopup action="caisse-web.caisseWebClient.loadConfirmAnnule" id="del-cmd-lnk" style="display:none;" /> 
+
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+			
+        <!-- Page Container -->
+        <div class="page-container">
+			<!-- Page Breadcrumb -->
+				<div class="page-header position-relative" style="left: 0px;top: 0px;<%=StringUtil.isEmpty(CaisseWebBaseAction.GET_STYLE_CONF("PANEL_ENETETE", null))?"background-image: linear-gradient(#fbfbfb, #ddd)":"background:"+ContextGloabalAppli.getGlobalConfig("PANEL_ENETETE")%>">
+					<div class="header-title" style="padding-top: 4px;">
+						
+			
+		<!-- ************************* LOGO *********************** -->
+			<a href="#" class="navbar-brand">
+            	<img alt="Caisse manager" src="resources/<%=StrimUtil.getGlobalConfigPropertie("context.soft") %>/img/logo_caisse_red.png?v=1.7<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>" style="    
+            	    height: 39px;
+    margin-top: -19px;
+    position: absolute;
+    left: -8px;
+    z-index: 9999999;" />
+            </a>			
+			<%
+            IMouvementService mouvementService = (IMouvementService)ServiceUtil.getBusinessBean(IMouvementService.class);
+            Map<String, byte[]> imagep = mouvementService.getDataImage(ContextAppli.getEtablissementBean().getId(), "restau");
+            if(imagep.size() > 0){
+            %>
+				<img src="data:image/jpeg;base64,<%=FileUtil.getByte64(imagep.entrySet().iterator().next().getValue())%>" alt="Caisse manager" style="
+				    height: 32px;
+    z-index: 9999999;
+    position: absolute;
+    left: 51px;
+    margin-top: -5px;" />                        
+        	<%
+            }
+         %>			
+		<!-- ***************************************************** -->			
+				         <b style="margin-left: 180px;color:green;line-height: 32px;font-size: 16px;">
+				         	<i class="fa fa-calendar" style="color: green;"></i>
+				         	Journ&eacute;e
+				         <%
+				         		if(ContextAppliCaisse.getJourneeBean() != null){
+				         	%>
+				        	<%=DateUtil.dateToString(ContextAppliCaisse.getJourneeBean().getDate_journee())%>
+				         <%
+				         	}
+				         %>
+				        <%
+				        	if(ContextAppliCaisse.getJourneeBean() != null){
+				        %>
+				        	 [<%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeBean().getStatut_journee())%>]
+				        <%
+				        	} else{
+				        %>
+				        	[Ferm&eacute;e]
+				        <%
+				        	}
+				        %>
+				        </b>
+				        |
+				        <b style="margin-left: 20px;line-height: 32px;font-size: 16px;">
+				        	<i class="fa fa-database" style="color:orange;"></i>
+				        <%
+				        	if(ContextAppli.getEtablissementBean() != null){
+				        %>
+				       		 <%=ContextAppliCaisse.getCaisseBean().getReference()%> 
+				       		 <%if(ContextAppliCaisse.getJourneeCaisseBean() != null){ %>
+				       		 	[<%=STATUT_JOURNEE.getLibelleFromStatut(ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse())%>]
+				       		 <%} %>
+				       	<%
+				       		 	} else{
+				       		 %>
+				       		<%=ContextAppliCaisse.getCaisseBean().getReference()%> [Ferm&eacute;e]
+				       	<%
+				       			}
+				       		%>	 
+				        </b>
+				        |
+			      	</div>
+			      <!--Header Buttons-->
+			      <div class="header-buttons">
+			      Zoom <select id="zoom_slct" style="background-color: transparent;margin-top: 5px;">
+			      			<option value="1">100%</option>
+			      			<option value="0.9">90%</option>
+			      			<option value="0.8">80%</option>
+			      			<option value="0.7">70%</option>
+			      			<option value="0.6">60%</option>
+			      			<option value="0.5">50%</option>
+			      		</select>
+			      		
+			      		
+				     <a class="sidebar-toggler" id='toogle-detail' href="javascript:">
+				         <i class="fa fa-arrows-h"></i>
+				     </a>
+				     <a class="refresh" id="refresh-toggler" href="javascript:" onclick="location.reload();">
+				         <i class="glyphicon glyphicon-refresh"></i>
+				     </a>
+				     <a class="fullscreen" id="fullscreen-toggler" href="javascript:">
+				         <i class="glyphicon glyphicon-fullscreen"></i>
+				     </a>
+				 </div>
+			      <!--Header Buttons End-->
+			  </div>
+			  <!-- /Page Header -->
+			
+			<div class="page-body" style="position:fixed; margin: 0px;padding: 0px;margin-top: 40px;">
+				<div class="widget">
+				<std:form name="data-form">
+					<input type="hidden" name="qte_calc" id="qte_calc">
+					
+			         <div class="widget-body" style="padding: 1px;">
+			         	<!-- Parie gauche -->
+			         	<div style="min-height: 534px;float: left;width: <%=WIDTH_CMD%>px;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_LEFT", null)%>" id="left-div">
+		         			<!-- D&eacute;tail articles -->
+		         			<%
+		         				if(isJourneeCaisseOuverte){
+		         			%>
+		         			<jsp:include page="/domaine/caisse_restau/client-place/commande-detail.jsp" />
+		         			<%
+		         				}
+		         			%>
+						</div>
+						
+						<!-- Panneau droit -->
+						<div style="float: left;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_RIGHT", null)%>" id="right-div">
+							<jsp:include page="/domaine/caisse_restau/client-place/caisse-right-bloc.jsp"></jsp:include>
+						</div>	
+					</div>
+				</std:form>
+			</div>
+			</div>
+        </div>
+        <!-- /Page Container -->
+
+       <script type="text/javascript">
+		$(document).ready(function (){
+			callExternalUrl("http://localhost:8001/cm-client?act=fullScrn");
+		});
+	</script>
+	
+	<script src="resources/framework/js/keyboard/my_keyboard.js?v=<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>"></script>
+    <jsp:include page="/commun/keyboard-popup.jsp" />
+    <jsp:include page="/commun/keyboard-popup-num.jsp" />

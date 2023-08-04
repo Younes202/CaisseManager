@@ -1,0 +1,64 @@
+
+<%@page import="java.math.BigDecimal"%>
+<%@page import="java.util.List"%>
+<%@page import="java.util.Map"%>
+
+
+<div id="bar-chart" class="chart" style="border-top: 1px solid #262626;margin-top: 10px;height: 430px;"></div>
+
+<script type="text/javascript">
+<%
+Map<String, List<BigDecimal>> data = (Map<String, List<BigDecimal>>)request.getAttribute("dataEmploye");
+%>
+
+var app = {};
+
+var chartDom = document.getElementById('bar-chart');
+var myChart = echarts.init(chartDom);
+var option;
+
+//Bar Chart
+var d1_1 = [];
+var d1_2 = [];
+var d1_3 = [];
+var d1_4 = [];
+
+<%
+String strChiffre = "", strEcart = "", strAnnuCmd = "", strAnnulLigne = "";
+String employes = "";
+String typeCat = "";
+for(String empl : data.keySet()){
+	List<BigDecimal> listData = data.get(empl);
+	
+	strChiffre += "\""+empl+"\":"+(listData.get(0)!=null?listData.get(0).intValue():0)+",";
+	strEcart += "\""+empl+"\":"+(listData.get(1)!=null?listData.get(1).intValue():0)+",";
+	strAnnuCmd += "\""+empl+"\":"+(listData.get(2)!=null?listData.get(2).intValue():0)+",";
+	strAnnulLigne += "\""+empl+"\":"+(listData.get(3)!=null?listData.get(3).intValue():0)+",";
+	
+	employes += "\""+empl+"\",";
+	typeCat += "{ type: 'bar',emphasis: {focus: 'series'} },";
+}
+%>
+option = {
+  legend: {},
+  tooltip: {},
+  dataset: {
+    dimensions: ['product', <%=employes%>],
+    source: [
+      { product: 'Chiffres', <%=strChiffre%> },
+      { product: 'Ecarts caisse', <%=strEcart%> },
+      { product: 'Annulations CMD', <%=strAnnuCmd%> },
+      { product: 'Annulations Ligne', <%=strAnnulLigne%> }
+    ]
+  },
+  xAxis: { type: 'category' },
+  yAxis: {},
+  // Declare several bar series, each will be mapped
+  // to a column of dataset.source by default.
+  series: [<%=typeCat%>]
+};
+
+option && myChart.setOption(option);
+
+</script> 
+       

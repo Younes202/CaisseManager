@@ -1,0 +1,6 @@
+poste.intitule=Intitule
+poste.is_cadre=Cadre
+poste.description=Description
+poste.qualification_enum=Qualification
+poste.type_enum=Type
+poste.list=Liste des postes

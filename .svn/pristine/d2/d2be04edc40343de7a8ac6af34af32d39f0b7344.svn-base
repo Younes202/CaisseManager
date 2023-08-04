@@ -1,0 +1,338 @@
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.beanContext.EtablissementPersistant"%>
+<%@page import="java.util.List"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="java.util.Map"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<!DOCTYPE html>
+<html lang="fr-fr" style="overflow: hidden;">	
+	<head>
+		<title>Gestion de la caisse automatique</title>
+		<jsp:include page="/WEB-INF/fragment/header-resources.jsp"></jsp:include>
+		
+		<link rel="stylesheet" type="text/css" href="resources/caisse/css/caisse.css?v=<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>12">
+		 <link href="resources/framework/js/contextmenu/jquery.contextMenu.min.css" rel="stylesheet" type="text/css" />
+		 <script src="resources/framework/js/contextmenu/jquery.contextMenu.min.js" type="text/javascript"></script>
+	 	<script src="resources/framework/js/contextmenu/jquery.ui.position.min.js" type="text/javascript"></script>
+		
+		<style type="text/css">
+			.bloc-btn {
+				height: 78px;
+			    border-radius: 17px;
+			    width: 98%;
+			    line-height: 63px;
+			    font-size: 26px;
+			    background-color: #fff;
+			    margin-bottom: 10px;
+			    text-align: left;
+    			padding-left: 20%;
+			}
+			.bloc-btn i{
+				font-size: 26px !important;
+			}
+			
+			.context-menu-root .off {
+				color: green;
+			}
+			.context-menu-root .com{
+				color: blue;
+			}
+			.context-menu-active{
+				background-color: yellow;
+			}
+			.btn.btn-circle.btn-lg {
+				width: 45px;
+				height: 45px;	
+			}
+			#banner_foot_act img{
+				width: 25px;
+			}
+    		.caisse-top-mobile-btn{
+    			color: black;
+    		}
+    		.ligne-fam-style{
+    			font-size: 14px;
+    		}
+		</style>
+
+	<%
+		ControllerUtil.cleanAll(request);
+	%>	
+		
+	<script type="text/javascript">
+		function managerFooterBanner(){
+			$("#back_btn, #up_btn").hide();
+		}
+		
+		function managerInitCaisseTmp(){
+			if ($.active > 0) {
+				setTimeout(function(){
+					managerInitCaisseTmp();
+				}, 1000);
+				return;
+			}
+			if($("#top_msg_banner_det span").length==0){
+				$("button[id^='close_modal']").each(function(){
+					$(this).trigger('click');
+					$(".modal-backdrop").hide();
+				});
+				managerFooterBanner();
+			}
+		}
+			
+		function managerInitCaisse(isImmediat){
+			if(isImmediat){
+				managerInitCaisseTmp();
+			} else{
+				setTimeout(function(){
+					managerInitCaisseTmp();
+				}, 1000);
+			}
+		}
+		
+		$(document).ready(function (){
+			// Manage floating mnu --------------------
+			$(document).mouseup(function(e){
+				var container = $("#mnu_r_top");
+			    if (!container.is(e.target) && container.has(e.target).length === 0){
+			       $("#mnu_r_top").hide(100);
+			    }
+			});
+			$("#mnu_r_top a").click(function(){
+				$("#mnu_r_top").hide(100);
+			});
+			// -----------------END--------------------
+			
+			navigator.vibrate(1000);  // this will vibrate for 1 second
+			
+			setTimeout(() => {
+				refreshSize();	
+			}, 100);
+			
+			$("#toogle-detail").click(function(){
+				if($("#right-div").attr("disp") != 'full'){
+					$("#right-div").attr("disp", 'full');
+					$("#left-div").css("display", "none");
+					$("#right-div")
+						.css("position", "fixed")
+						.css("width", "100%")
+						.css("height", ($(window).height()+70)+"px")
+				    	.css("top", "40px")
+				    	.css("left", "0px");
+				} else{
+					$("#right-div").removeAttr("disp");
+					$("#right-div").css("position", "relative").css("top", "0px");
+					$("#left-div").css("display", "");
+					refreshSize();
+				}
+			});
+		    $(document).on('click', 'a[id="del_cli_lnk"]', function(){
+		    	$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), $(this).attr("params"), $("#targ_link"), "Ce client ainsi que ses articles seront supprimés.<br>Voulez-vous confirmer ?", null, "Suppression client");
+		    });
+		    $(document).on('click', 'a[id="del_tab_lnk"]', function(){
+		    	$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), $(this).attr("params"), $("#targ_link"), "Cette table ainsi que ses articles et ses clients seront supprimés.<br>Voulez-vous confirmer ?", null, "Suppression client");
+		    });
+			
+			$(document).on('click', '#annul_cmd_main', function(){
+				$("#targ_link").attr("targetDiv", "left-div");
+				showConfirmDeleteBox($(this).attr("act"), "tp=annul", $("#targ_link"), "Cette commande sera annulée.<br>Voulez-vous confirmer ?", "managerInitCaisse(true);$('#main_menu_tab').trigger('click');", "Annulation commande");
+			});
+		});
+		
+		function refreshSize(){
+			var dataZoom = readLocalStorage('zoom_cai_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				var ratioArray = getWindowRatioZoom();
+				$("#zoom_slct").val(dataZoom);
+			} else{
+				dataZoom = 0.9;
+			}
+			// Css
+			manageZoom(dataZoom);
+			
+			var widowHeight = $(window).height();
+			var widowWidth = $(window).width();
+			// Right bloc
+			$("#tab_det_fam").css("height", (widowHeight-30)+"px");
+			$("#tab_det_fam").css("width", (widowWidth+40)+"px");
+			// Commande bloc
+			$("#left-div").css("height", (widowHeight-10)+"px");
+			$("#right-div").css("height", (widowHeight-280)+"px");
+		}
+			
+		function manageZoom(val){
+			$("html").css("zoom", val).css("-moz-transform", "scale("+val+")").css("-moz-transform-origin", "0.0");
+		}
+		
+		function manageSizeScreen(isHomeCmd){
+			// Manage cmd
+			var widowHeight = $(window).height();
+			//
+			if(isHomeCmd){
+				$("home_lnk").hide();
+				$("#banner_foot_act").show();
+			} else{
+				$("#home_lnk").show();
+				$("#banner_foot_act").hide();
+				
+				$("#div-histo").css("height", (widowHeight-30)+"px");
+				$("#main-ets-div, #right-div").css("height", (widowHeight+30)+"px");
+			}
+		}
+		
+		$(document).ready(function (){
+			refreshSize();
+			
+			$("#zoom_slct").change(function(){
+				//$.cookie('zoom_cai_cock', $(this).val(), { expires: 1000 });
+				writeLocalStorage('zoom_cai_cock', $(this).val());
+				refreshSize();
+			});
+			
+			$("#delog_lnk").click(function(){
+				showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse.clientMobile.logout")%>', null, $("#targ_link"), "Vous &ecirc;tes sur le point de vous d&eacute;connecter.<br>Voulez-vous confirmer ?", null, "Quitter la session");
+			});
+			
+			$("#fullscreen-toggler").click(function(){
+				setTimeout(function(){
+					refreshSize();
+				}, 1000);
+			});
+
+			var doit;
+			window.onresize = function(){
+			  clearTimeout(doit);
+			  doit = setTimeout(refreshSize, 100);
+			};
+		});
+		
+		function getWindowRatioZoom(){
+			var ratioW = 1;
+			var ratioH = 1;
+			var dataZoom = readLocalStorage('zoom_cai_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				if(dataZoom == '0.9'){
+					ratioW = 9;
+					ratioH = 9;
+				} else if(dataZoom == '0.85'){
+					ratioW = 5.6;
+					ratioH = 5.6;
+				} else if(dataZoom == '0.8'){
+					ratioW = 4;
+					ratioH = 4;
+				} else if(dataZoom == '0.75'){
+					ratioW = 3;
+					ratioH = 3;
+				} else if(dataZoom == '0.7'){
+					ratioW = 2.35;
+					ratioH = 2.35;
+				} else if(dataZoom == '0.6'){
+					ratioW = 1.5;
+					ratioH = 1.5;
+				} else if(dataZoom == '0.5'){
+					ratioW = 1;
+					ratioH = 1;
+				}
+			}
+			var ratioArray = [ratioW, ratioH];
+			
+			return ratioArray;
+		}
+		
+		function refreshSize(){
+			var dataZoom = readLocalStorage('zoom_cai_cock');
+			if(dataZoom && dataZoom!=null && dataZoom!='' && dataZoom!='1'){
+				var ratioArray = getWindowRatioZoom();
+				$("#zoom_slct").val(dataZoom);
+			} else{
+				dataZoom = 0.9;
+			}
+			// Css
+			manageZoom(dataZoom);
+			
+			var widowHeight = $(window).height();
+			var widowWidth = $(window).width();
+			$("#right-div, #main-ets-div").css("height", (widowHeight-25)+"px");
+		}
+		</script>		
+	</head>
+<!-- /Head -->
+
+<!-- Body -->
+<body>
+
+<menu id="html5menu" style="display:none" class="showcase">
+  	
+</menu>
+
+	<a href="javascript:" id="targ_link" targetDiv="left-div"></a>
+	<a href="javascript:" id="targ_link_pop" targetdiv="generic_modal_body" data-toggle="modal" data-target="#generic_modal"></a>
+
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+			
+    <!-- Main Container -->
+    <div class="main-container container-fluid">
+        <!-- Page Container -->
+        <div class="page-container">
+			<jsp:include page="/domaine/caisse/mobile-client/mnu_top_caisse_mobile.jsp" />
+			
+			<div class="page-body" style="position:fixed; margin: 0px;padding: 0px;margin-top: 50px !important;    width: 100%;">
+				<div class="widget">
+					<std:form name="data-form">
+				         <div class="widget-body" style="padding: 1px;" id="widget-body">
+							<div style="float: left;
+								width:100%;
+								overflow:auto;
+								background-color: white;
+								padding-left: 0px;
+								padding-right: 0px;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_RIGHT", null)%>" id="main-ets-div">
+								
+								<input type="hidden" name="qte_calc" id="qte_calc">
+							    <!-- Parie gauche -->
+							    <div style="position:fixed;width:100%;display:none;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_LEFT", null)%>;z-index:99;" id="left-div">
+							    	<jsp:include page="commande-detail.jsp" />
+								</div>
+								
+								<!-- Panneau droit -->
+								<div style="float: left;width:100%;overflow:auto;margin-top: 10px;background-color: white;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_RIGHT", null)%>" id="right-div">
+									<jsp:include page="caisse-right-bloc.jsp"></jsp:include>
+								</div>
+									
+								<jsp:include page="footer-banner.jsp"></jsp:include>
+							    
+							    <span id="span_pers_up" style="position: absolute;z-index: 999;right: 30px;width: 150px;top: 29px;white-space: nowrap;">
+							    	<span id="span_pers"></span>
+							    </span>
+    
+    						</div>
+						</div>
+					</std:form>
+				</div>
+			</div>
+        </div>
+        <!-- /Page Container -->
+    </div>
+    
+    <!-- Main Container -->
+    <jsp:include page="/WEB-INF/fragment/footer-resources.jsp"></jsp:include>
+	<jsp:include page="/WEB-INF/fragment/static-panels.jsp"/>	
+	
+  </body>
+    
+</html>

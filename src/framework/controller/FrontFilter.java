@@ -1,0 +1,646 @@
+package framework.controller;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import org.apache.log4j.Logger;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import framework.controller.bean.MenuBean;
+import framework.controller.bean.message.BannerMessageBean;
+import framework.controller.bean.message.DialogMessageBean;
+import framework.controller.bean.message.FieldMessageBean;
+import framework.controller.bean.message.GrowlMessageBean;
+import framework.controller.bean.message.IMessageBean;
+import framework.model.common.constante.ActionConstante;
+import framework.model.common.constante.ProjectConstante;
+import framework.model.common.constante.ProjectConstante.MSG_TYPE;
+import framework.model.common.constante.ProjectConstante.SESSION_SCOPE_ENUM;
+import framework.model.common.exception.ActionValidationException;
+import framework.model.common.exception.BeanValidationException;
+import framework.model.common.exception.ControllerNotFoundException;
+import framework.model.common.service.FrameworkMessageService;
+import framework.model.common.service.MessageIdsService;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.EncryptionUtil;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.ServiceUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.common.util.export.ExportTable;
+import framework.model.util.MenuMappingService;
+
+public class FrontFilter implements Filter {
+	private ServletContext context;
+	private final static Logger LOGGER = Logger.getLogger(FrontFilter.class);
+    public static final String ENCODING = "encoding"; //key for encoding.
+    public static String encodingValue;
+//    private static final long MEGABYTE = 1024L * 1024L;
+    
+	/*
+	 * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse, javax.servlet.FilterChain)
+	 */ 
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) throws IOException, ServletException {
+		if (context == null){
+			return;
+		}
+		
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+		Map<String, Object> params = null;
+		
+		if(StringUtil.isTrue(""+request.getAttribute("SKIP_FILTER"))){
+			chain.doFilter(req, res);
+			return;
+		}
+		
+		if(request.getParameter("upload") != null){
+			manageUploadFile(request, response);
+			return;
+		}
+		
+		//
+		params = new HashMap<>(request.getParameterMap());
+		params = ControllerUtil.refreshMapValues(params);
+		request.setAttribute(ProjectConstante.WORK_PARAMS, params);
+		
+		// Des-Encodage URL + work id----------------------------------
+		if(params.get(ProjectConstante.WORK_ID) != null){
+			params.put(ProjectConstante.WORK_ID, EncryptionUtil.decrypt(""+params.get(ProjectConstante.WORK_ID)));
+		}
+		if(params.get(ProjectConstante.WORK_FORM_ACTION) != null){
+			params.put(ProjectConstante.WORK_FORM_ACTION, EncryptionUtil.decrypt(""+params.get(ProjectConstante.WORK_FORM_ACTION)));
+		}
+		if(params.get(ProjectConstante.WORK_ACTION) != null){
+			String decryptUrl = EncryptionUtil.decrypt(""+params.get(ProjectConstante.WORK_ACTION));
+			params.put(ProjectConstante.WORK_ACTION, decryptUrl);
+		}
+		
+		String ctrlAction = ControllerUtil.getCtrlAction(request);
+		
+		System.out.println("----->"+ctrlAction);
+		
+		// Remplacer et decypter les identifiants
+		if(ctrlAction.indexOf(ActionConstante.FIND) == -1 && StringUtil.isEmpty(params.get("work_body_table"))){
+			Object[] keys = params.keySet().toArray();
+			for(Object keyObj : keys){
+				String key = ""+keyObj;
+				Object val = params.get(key);
+				if(key.endsWith(".id") && StringUtil.isNotEmpty(val)){
+					params.put(key, EncryptionUtil.decrypt(""+val)); 
+				} else if(key.endsWith("_worksys")){
+					params.put(key.substring(0, key.lastIndexOf("_"))+".id", EncryptionUtil.decrypt(""+val));
+				}
+			}
+		}		
+		//--------------------------------------------------------------
+		
+		boolean isConnectActionOri = ProjectConstante.CONNECT_PAGE_ACTION.equals(ctrlAction);
+		
+		try {
+			boolean isAjaxBackJob = ControllerUtil.isAjaxBackJob(request);
+			// IMPORTANT 
+			request.setCharacterEncoding(encodingValue);
+			response.setContentType("text/html;charset="+encodingValue);
+
+			// *********************** Ajax back job **********************************
+			if(isAjaxBackJob){
+				String methode = ControllerUtil.getParam(request, "methode");
+				if(methode != null){
+					ReflectUtil.invokeMethode(BackCallController.class.newInstance(), methode, new Object[] { request, response },
+																			new Class[] { HttpServletRequest.class, HttpServletResponse.class});
+				} else if(StringUtil.isNotEmpty(ControllerUtil.getCtrlAction(request))){
+					callBaseController(request, response);
+				}
+				return;
+			}
+			// ********************************************** End ****************************************//
+			//
+			String url = null;
+			// Clear menu and controller attributes------------
+			clearMenuAttributes(request, params);
+
+			// Update menu navigation
+			if(StringUtil.isEmpty(ctrlAction)){
+				String dctrlAction = manageMenuNavigation(request, params, ctrlAction);
+				
+				//******************** Ajout pour éviter le chargement de la page HOME pour rien
+				if(StringUtil.isEmpty(dctrlAction) && (params.get("isLog") != null || params.size() == 0)){
+					ControllerUtil.forward(context, req, res, "/index.jsp");
+					return;
+				}
+				//**********************
+				
+				if(StringUtil.isNotEmpty(dctrlAction)){
+					ctrlAction = dctrlAction;
+				}
+			}
+			
+			// If framework call-------------------------------
+			if (StringUtil.isNotEmpty(ctrlAction)) {
+				// Get action---------------
+				ctrlAction = ControllerUtil.getCtrlAction(request);
+				// Clear data size ---> Bug depended tables
+				TableFormCriteriaUtil.clearDataSize(request);
+
+				// Manage question dialog box----
+				String dialogIdAction = (String)params.get(ProjectConstante.WORK_ID_QUEST_DIALOG);
+				if(StringUtil.isNotEmpty(dialogIdAction)){
+					MessageIdsService.addConfirmDialogId(dialogIdAction);
+					MessageIdsService.setQuestionDialogAction(dialogIdAction);
+				}
+
+				// ****** Call base and get url--------- ******
+				url = callBaseController(request, response);
+				
+				// Gestion de la mémoire RAM -------------------------------------
+//				long ramConsume = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())/MEGABYTE;
+//				if(ramConsume > 300){
+//					System.gc();// Call garbage collector		
+//				}//---------------------------------------------------------------
+				
+				// Error case -> stop to write JSON response ----------------------------------------------
+				if("MSG_RES".equals(url)){
+					return;
+				}
+				//-------------------------------------------------------------------------------------------
+				
+				// Return if is export mode
+				if(ControllerUtil.isDownLoadMode(request)){
+					return;
+				}
+
+				// If export action--------------
+				boolean isBodyTableAction = ControllerUtil.isBodyTableAction(request);
+				if(TableFormCriteriaUtil.isExporMode(request) && !isBodyTableAction){
+					ExportTable.execute(request, response, context);
+					return;
+				}
+				// Forward
+				if(StringUtil.isNotEmpty(url)){
+					if(isConnectActionOri && ControllerUtil.isAvailableConnexion(request)){
+						ControllerUtil.redirect(response, request.getRequestURI());
+					} else{
+						ControllerUtil.forward(context, req, res, url);
+					}
+				} else if(StringUtil.isEmpty(params.get(ProjectConstante.IS_AJAX_PARTIAL_INJECT))) {
+					ControllerUtil.forward(context, req, res, "/commun/notfound.jsp");
+				}
+
+				// Rset map validator
+				if(StringUtil.isTrue(req.getParameter("bck"))){
+					ControllerUtil.removeAllValidatorMap(request);
+				}
+				
+				return;
+			} else if(request.getParameter("lmnu") != null){
+				ControllerUtil.forward(context, req, res, "/commun/notfound.jsp");
+				return;
+			}
+			// Call next filter
+			chain.doFilter(req, res);
+		} catch(Exception e){
+			LOGGER.error("Erreur : ", e);
+			ControllerUtil.forward(context, req, res, "/commun/error.jsp");
+		}
+
+		return;
+	}
+
+	/**
+	 * @param request
+	 * @param ctrlAct
+	 */
+	public static void restaureBackParams(HttpServletRequest request, String ctrlAct, boolean isBackNeded){
+		// Restaurer les dernieres données si back
+		if(StringUtil.isTrue(request.getParameter("bck")) || (ctrlAct != null && "IS_BACK_NEEDED".equals(ctrlAct)) || isBackNeded){
+			Map<String,  Map<String, Object>> dataNavig = (Map)ControllerUtil.getMenuAttribute(ProjectConstante.WORK_DATA_NAVIG, request);
+			if(dataNavig != null){
+				Map<String, Object> params = dataNavig.get(ctrlAct);
+				if(params == null && dataNavig.size()>0){
+					//String act = dataNavig.keySet().iterator().next();
+					//params = dataNavig.get(act);
+					//ctrlAct = act;
+					Object[] dataArray = dataNavig.keySet().toArray();
+					params = dataNavig.get(dataArray[dataArray.length-1]);
+					ctrlAct = ""+dataArray[dataArray.length-1];
+				}
+				request.setAttribute(ProjectConstante.WORK_PARAMS, params);
+				// Supprimer pour ne pas considérer comme actionBodyTable
+				params.remove("work_body_table");
+				// Ecraser l'action
+				params.put(ProjectConstante.WORK_FORM_ACTION, ctrlAct); 
+			}
+			ControllerUtil.removeAllValidatorMap(request);
+		}
+	}
+	
+	/**
+	 * @param request
+	 * @param response
+	 * @throws IOException
+	 */
+	private void manageUploadFile(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		//0=Unload, 1=Upload, 2=Image
+		String uploadMode = request.getParameter("upload");
+		// Upload file
+		if(UploadFileUtil.UNLOAD.equals(uploadMode) || UploadFileUtil.UPLOAD.equals(uploadMode)){
+			UploadFileUtil.manageUploadFile(request);
+			response.getWriter().write("{}");
+			return;
+		}/* else if(UploadFileUtil.IMAGE.equals(uploadMode)){
+			String path = request.getParameter("pt");
+			String elementName = request.getParameter("ani");
+			if(StringUtil.isEmpty(path)){
+				return;
+			}
+			
+			File file = UploadFileUtil.getDocumentFile(path, elementName);
+			if(file == null || !file.exists()){
+				return;
+			}
+
+			InputStream fileContent = FileUtils.openInputStream(file);
+			ServletOutputStream outputStream = response.getOutputStream();
+    		int read = 0;
+    		byte[] bytes = new byte[1024];
+
+    		while ((read = fileContent.read(bytes)) != -1) {
+    			outputStream.write(bytes, 0, read);
+    			outputStream.flush();
+    		}
+    		outputStream.close();
+    		fileContent.close();
+
+			return;
+		}*/
+		
+	}
+
+	/**
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	private String callBaseController(HttpServletRequest request, HttpServletResponse response){
+		String url = null, ctrlActionCall = null;
+		String ctrlAction = ControllerUtil.getCtrlAction(request);
+		//
+		try{
+			// Manage history
+			manageNavigationHistory(request);
+			
+			// Restaurer en cas de recherche
+			if(ctrlAction.endsWith(ActionConstante.FIND)){
+				restaureBackParams(request, ctrlAction, false);
+			}
+			// Remettre l'action
+			Map<String, Object> params = (Map)request.getAttribute(ProjectConstante.WORK_PARAMS);
+			params.put(ProjectConstante.WORK_FORM_ACTION, ctrlAction);
+			
+			// Call service ---------------------------------------------------------------
+			url = ControllerBase.service(request, response, ctrlActionCall, context, false);
+			
+			// Stop propagation if downLoad mode
+			if(ControllerUtil.isDownLoadMode(request)){
+				return url;
+			}
+			// If returned page was another action
+			if(url != null && !url.startsWith("/") && url.indexOf(".") != -1) {
+				ctrlAction = url;
+			}
+			//-----------------------------------------------------------------------------
+			if(ProjectConstante.CONNECT_PAGE_ACTION.equals(ctrlAction)){
+				params.put(ProjectConstante.WORK_FORM_ACTION, ProjectConstante.HOME_PAGE_ACTION);
+			} else{
+				// Call other action
+				while((url != null) && !url.startsWith("/") && !url.equals("MSG_RES")){
+					ctrlAction = url;
+					// Erase the old action					
+					params.put(ProjectConstante.WORK_FORM_ACTION, ctrlAction);
+					
+					
+					// Restaurer en cas de recherche
+//					if(ctrlAction.endsWith(ActionConstante.FIND)){
+//						restaureBackParams(request, ctrlAction, false);
+//					}
+					
+					// this flag specifie if the action is forwarding to an other action
+					request.setAttribute(ProjectConstante.IS_FORWARD_ACTION, "true");
+				    url = ControllerBase.service(request, response, url, context, false);
+				}
+			}
+		} catch (ControllerNotFoundException e) {
+			LOGGER.error("No mapping bean found : --->" , e);
+		} catch(Exception e){
+			boolean isModelBeanError = (e.getClass().equals(ActionValidationException.class) || e.getClass().equals(BeanValidationException.class));
+			if(!isModelBeanError){
+				// If error during call action methods, forward to the corrent action and put error message in request
+				FrameworkMessageService.addTechnicalErrorMessage();
+				LOGGER.error("Erreur : ", e);
+			}
+		
+			List<IMessageBean> listMessages = MessageService.getListErrorMessages();
+			DialogMessageBean dialogTechnicMsg = FrameworkMessageService.getFrameworkErrorMessage();
+			Map<String, List<IMessageBean>> mapError = new HashMap<String, List<IMessageBean>>();
+			Gson gson = new GsonBuilder().create();
+			
+			if(dialogTechnicMsg != null || !ServiceUtil.isEmpty(listMessages)){
+				if(request.getParameter("lmnu") != null){// Not submit
+					FrameworkMessageService.clearMessages();
+					return url;
+				}
+				
+				//----------------------------------------- Test JSON ------------------------------------------------------
+				if(dialogTechnicMsg == null){
+					List<IMessageBean> bannerList = new ArrayList<IMessageBean>();
+					List<IMessageBean> fieldList = new ArrayList<IMessageBean>();
+					//List<IMessageBean> notifyList = new ArrayList<IMessageBean>();
+					List<IMessageBean> dialogList = new ArrayList<IMessageBean>();
+					List<IMessageBean> growlList = new ArrayList<IMessageBean>();
+	
+					mapError.put("banner_err_founded", bannerList);
+					mapError.put("field_err_founded", fieldList);
+					//mapError.put("notify_err_founded", notifyList);
+					mapError.put("dialog_err_founded", dialogList);
+					mapError.put("growl_err_founded", growlList);
+					
+					for (IMessageBean iMessageBean : listMessages) {
+						if(iMessageBean instanceof BannerMessageBean){
+							bannerList.add(iMessageBean);
+						} else if(iMessageBean instanceof FieldMessageBean){
+							fieldList.add(iMessageBean);
+						} else if(iMessageBean instanceof GrowlMessageBean){
+							growlList.add(iMessageBean);
+						}/* else if(iMessageBean instanceof NotifyMessageBean){
+							notifyList.add(iMessageBean);
+						}*/ else if(iMessageBean instanceof DialogMessageBean){
+							dialogList.add(iMessageBean);
+						}
+					}
+				} else{
+					List<IMessageBean> technicalList = new ArrayList<IMessageBean>();
+					// Erreur technique
+					technicalList.add(dialogTechnicMsg);
+					mapError.put("technic_err_founded", technicalList);
+				}
+				
+				// Clear messages
+				MessageService.clearMessages();
+				MessageIdsService.clearQuestionAction();
+				MessageIdsService.clearConfirmIds();
+				FrameworkMessageService.clearMessages();
+
+				String json = gson.toJson(mapError);
+				try {
+					response.getWriter().write(json);
+				} catch (IOException e1) {
+					LOGGER.error(e1);
+				}
+				return "MSG_RES";
+			} else if(MessageService.isQuestionExist()){
+//					Map<String, List<IMessageBean>> mapError = new HashMap<String, List<IMessageBean>>();
+				List<IMessageBean> questionList = new ArrayList<IMessageBean>();
+				mapError.put("question_err_founded", questionList);
+				//
+				List<DialogMessageBean> listMessage = MessageService.getListDialogMessageBean();
+				for(DialogMessageBean msgBean : listMessage){
+					if(msgBean.getType().equals(MSG_TYPE.QUESTION)){
+						questionList.add(msgBean);
+					}
+				}
+				
+				FrameworkMessageService.clearMessages();
+				MessageService.clearMessages();
+				
+				String json = gson.toJson(mapError);
+				try {
+					response.getWriter().write(json);
+				} catch (IOException e1) {
+					LOGGER.error(e1);
+				}
+				return "MSG_RES";
+			}
+		}
+
+		return url;
+	}
+
+	/**
+	 * @param request
+	 */
+	@SuppressWarnings("unchecked")
+	private void manageNavigationHistory(HttpServletRequest request) {
+		Map params = (Map)request.getAttribute(ProjectConstante.WORK_PARAMS);
+		String currentCtrlAction = ControllerUtil.getCtrlAction(request);
+		if((!currentCtrlAction.endsWith(ActionConstante.FIND) && !currentCtrlAction.endsWith(ActionConstante.EDIT)) || StringUtil.isTrue(request.getParameter("bck"))){
+			return;
+		}
+		
+		//
+		if(StringUtil.isNotEmpty(currentCtrlAction) && !StringUtil.isTrue(ProjectConstante.WORK_NO_SAVE_ACTION)){
+			Map<String,  Map<String, Object>> dataNavig = (Map)ControllerUtil.getMenuAttribute(ProjectConstante.WORK_DATA_NAVIG, request);
+			if(dataNavig == null){
+				dataNavig = new LinkedHashMap<String, Map<String, Object>>();
+			}
+			// Current map
+			Map<String, Object> currentParams = new HashMap<String, Object>(params);
+			dataNavig.put(currentCtrlAction.substring(0, currentCtrlAction.lastIndexOf(".")+1) + ActionConstante.FIND, currentParams);
+			//
+			ControllerUtil.setMenuAttribute(ProjectConstante.WORK_DATA_NAVIG, dataNavig, request);
+    	}
+	}
+
+	/**
+	 * @param param
+	 * @param request
+	 */
+	@SuppressWarnings("unchecked")
+	private String manageMenuNavigation(HttpServletRequest request, Map params, String ctrlAction){
+		String topMenuId = (String)params.get(ProjectConstante.TOP_MENU_ID);
+		String leftMenuId = (String)params.get(ProjectConstante.LEFT_MENU_ID);
+		
+		// Top menu
+		if(StringUtil.isNotEmpty(topMenuId)){
+			// Top menu array
+			String[] menuArray = StringUtil.getArrayFromStringDelim(topMenuId, ".");
+			if(menuArray.length > 1){
+				topMenuId = menuArray[menuArray.length-1];
+			}
+			//
+			List<MenuBean> listMenu = MenuMappingService.getListChildrenSheet(topMenuId);
+
+
+			// If url is not available
+			if((listMenu == null) || (listMenu.size() == 0)){
+				ControllerUtil.setUserAttribute(ProjectConstante.TOP_MENU_ID, null, request);
+				params.put(ProjectConstante.WORK_FORM_ACTION, ProjectConstante.HOME_PAGE_ACTION);
+				return "/commun/notfound.jsp";
+			} else{
+				ControllerUtil.setUserAttribute(ProjectConstante.TOP_MENU_ID, topMenuId, request);
+			}
+
+//			MenuBean defaultMenuBean = MenuMappingService.getDefaultMenu(listMenu);
+			MenuBean menuToShow = null;
+
+    		// Active default menu
+//    		if((defaultMenuBean != null) && Context.isMenuAvailable(defaultMenuBean.getId(), false)){
+//    			menuToShow = defaultMenuBean;
+//    		} else{
+    			// First valid
+    			for(MenuBean menuBean : listMenu){
+    				if(menuBean.isSheet() && Context.isMenuAvailable(menuBean.getId(), false)){
+    					menuToShow = menuBean;
+    					break;
+    				}
+    			}
+//    		}
+
+    		if(menuToShow != null){
+    			if(StringUtil.isEmpty(ctrlAction) || ProjectConstante.HOME_PAGE_ACTION.equals(ctrlAction) || ProjectConstante.CONNECT_PAGE_ACTION.equals(ctrlAction)){
+    				// Add params to params map
+    				ControllerUtil.putParamsInParamsMap(params, menuToShow.getParams());
+    				//
+	    			params.put(ProjectConstante.WORK_FORM_ACTION, menuToShow.getUrl());
+	    			ctrlAction = menuToShow.getUrl();
+	    		}
+    			// Left menu
+    			//ControllerUtil.setUserAttribute(ProjectConstante.LEFT_MENU_ID, menuToShow.getCompositId(), request);
+    			MessageService.getGlobalMap().put(ProjectConstante.LEFT_MENU_ID, menuToShow.getCompositId());
+    		} else{
+    			//ControllerUtil.setUserAttribute(ProjectConstante.LEFT_MENU_ID, null, request);
+    			MessageService.getGlobalMap().put(ProjectConstante.LEFT_MENU_ID, null);
+    		}
+		} else if(StringUtil.isNotEmpty(leftMenuId)){
+			MenuBean currMenu = MenuMappingService.getMenuById(leftMenuId);
+
+			// Home page
+		/*	if(("0".equals(leftMenuId) || "-1".equals(leftMenuId))){
+				ControllerUtil.setUserAttribute(ProjectConstante.TOP_MENU_ID, null, request);
+				currMenu = new MenuBean();
+				if("0".equals(leftMenuId)){
+					currMenu.setUrl(ProjectConstante.HOME_PAGE_ACTION);
+				} else if(!ControllerUtil.isWorkFormSubmited(request)){
+					currMenu.setUrl(ProjectConstante.DISCONNECT_PAGE_ACTION);
+				}
+			}*/
+
+			// If url is not available
+			if(currMenu == null){
+				params.put(ProjectConstante.WORK_FORM_ACTION, ProjectConstante.HOME_PAGE_ACTION);
+				return "/commun/notfound.jsp";
+			}
+
+			// Add params to params map
+			ControllerUtil.putParamsInParamsMap(params, currMenu.getParams());
+			//
+			ctrlAction = currMenu.getUrl();
+			if(StringUtil.isNotEmpty(ctrlAction)){
+				params.put(ProjectConstante.WORK_FORM_ACTION, ctrlAction);
+			}
+			
+			//ControllerUtil.setUserAttribute(ProjectConstante.LEFT_MENU_ID, leftMenuId, request);
+			MessageService.getGlobalMap().put(ProjectConstante.LEFT_MENU_ID, leftMenuId);
+    	} else{
+    		if(StringUtil.isEmpty(ctrlAction) && (ControllerUtil.getParam(request, "frnturl") == null)){
+    			//ControllerUtil.removeUserAttribute(ProjectConstante.TOP_MENU_ID, request);
+    			//ControllerUtil.removeUserAttribute(ProjectConstante.LEFT_MENU_ID, request);
+    			MessageService.getGlobalMap().remove(ProjectConstante.TOP_MENU_ID);
+    			MessageService.getGlobalMap().remove(ProjectConstante.LEFT_MENU_ID);
+    			ctrlAction = null;
+    		}
+    	}
+
+		return ctrlAction;
+	}
+
+	/**
+	 * @param request
+	 */
+	private void clearMenuAttributes(HttpServletRequest request, Map params) {
+		String currTab = "tab_nav_0";//request.getParameter("curr_tab_id");
+		String leftMenuId = (String)params.get(ProjectConstante.LEFT_MENU_ID);
+		
+		if(StringUtil.isNotEmpty(leftMenuId)) {
+			String pLeftMenuId = (String)MessageService.getGlobalMap().get(ProjectConstante.LEFT_MENU_ID);
+			String startVal = currTab + SESSION_SCOPE_ENUM.MENU.getType();
+			// Clear menu attributes				
+			if(!leftMenuId.equals(pLeftMenuId)){
+				clearAttributes(request, startVal);
+			}
+		}
+			// Current menu
+//			String topMenuId = (String)params.get(ProjectConstante.TOP_MENU_ID);
+			
+			// Previus menu
+//			String pTopMenuId = (String)MessageService.getGlobalMap().get(ProjectConstante.TOP_MENU_ID);
+			//String pTopMenuId = (String)ControllerUtil.getUserAttribute(ProjectConstante.TOP_MENU_ID, request);
+			//String pLeftMenuId = (String)ControllerUtil.getUserAttribute(ProjectConstante.LEFT_MENU_ID, request);
+	
+//			clearAttributes(request, topMenuId, pTopMenuId, SESSION_SCOPE_ENUM.MENU);
+	}
+
+	/**
+	 * @param request
+	 * @param prefixKey
+	 */
+	private boolean clearAttributes(HttpServletRequest request, String startVal){
+		cleanAttributesStartWith(request, startVal);
+		// Clear confirmation message ids
+		MessageIdsService.clearConfirmIds();
+		MessageIdsService.clearQuestionAction();
+
+		return true;
+	}
+
+	/**
+	 * @param request
+	 * @param start
+	 */
+	private void cleanAttributesStartWith(HttpServletRequest request, String start) {
+		HttpSession session = request.getSession(false);
+		if(session != null){
+			Enumeration attributes = session.getAttributeNames();
+			while(attributes.hasMoreElements()){
+				String attribute = (String)attributes.nextElement();
+				//
+				if(attribute.startsWith(start)){
+					session.removeAttribute(attribute);
+				}
+			}
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see javax.servlet.Filter#init(javax.servlet.FilterConfig)
+	 */
+	public void init(FilterConfig filterConfig) throws ServletException {
+		this.context = filterConfig.getServletContext();
+		encodingValue = filterConfig.getInitParameter(ENCODING);
+	}
+
+	/* (non-Javadoc)
+	 * @see javax.servlet.Filter#destroy()
+	 */
+	public void destroy() {
+		this.context = null;
+	}
+}

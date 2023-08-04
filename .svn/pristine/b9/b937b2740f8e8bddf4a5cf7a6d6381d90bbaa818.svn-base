@@ -1,0 +1,5 @@
+preparation.list=Liste des pr\u00e9parations
+preparation.libelle=Libell\u00e9
+preparation.code=Code
+preparation.commentaire=Commentaire
+preparation.msg.articles=Au moins un article doit \u00eatre s\u00e9l\u00e9ctionn\u00e9 avant de sauvegarder

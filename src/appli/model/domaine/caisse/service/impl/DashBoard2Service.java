@@ -1,0 +1,400 @@
+package appli.model.domaine.caisse.service.impl;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.Query;
+
+import org.hibernate.criterion.Order;
+
+import appli.controller.domaine.habilitation.bean.ProfileBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.persistant.EtatFinancePersistant;
+import appli.model.domaine.caisse.persistant.JourneeVenteErpView;
+import appli.model.domaine.caisse.service.IDashBoard2Service;
+import appli.model.domaine.dashboard.dao.IDashBoardDao;
+import appli.model.domaine.stock.persistant.ArticleDetailPersistant;
+import appli.model.domaine.stock.persistant.ArticlePersistant;
+import appli.model.domaine.stock.persistant.FamillePersistant;
+import appli.model.domaine.stock.service.IArticleService;
+import appli.model.domaine.stock.service.IFamilleService;
+import appli.model.domaine.stock.service.impl.RepartitionBean;
+import appli.model.domaine.vente.persistant.CaisseMouvementArticlePersistant;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+public class DashBoard2Service extends GenericJpaService<ProfileBean, Long> implements IDashBoard2Service {
+	@Inject
+	private IDashBoardDao dashBoardDao;
+	@Inject
+	private IFamilleService familleService;
+	@Inject
+	private IArticleService articleService;
+	
+	@Override
+	public JourneePersistant getLastJourneCaisse() {
+		List<JourneePersistant> listJournee = (List<JourneePersistant>) familleService.findAll(
+				JourneePersistant.class, Order.desc("date_journee"));
+
+		return listJournee.size() > 0 ? listJournee.get(0) : null;
+	}
+
+	@Override
+	public JourneePersistant getJourneeDetail(Long journeeId){
+		JourneePersistant vp = (JourneePersistant) dashBoardDao.getSingleResult(
+				dashBoardDao.getQuery("from JourneePersistant where id=:journee_id ")
+				.setParameter("journee_id", journeeId));
+		return vp == null ? new JourneePersistant() : vp;
+	}
+
+	/**
+	 * Retourne une liste qui contient les dates de jours et le total montant
+	 * gagné dans ce jours là
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<JourneePersistant> getVentesJours() {
+		return dashBoardDao.getQuery("from JourneePersistant order by id desc ")
+				.setMaxResults(30)
+				.getResultList();
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getVentesJoursErp() {
+		List<Object[]> listData = familleService.getNativeQuery("select sum(mtt_commande_net) as montant, day(date_vente) as day, "
+				+ "month(date_vente) as mois "
+				+ "from vente_mouvement group by day(date_vente) "
+				+ "order by day(date_vente) desc ")
+				.setMaxResults(30)
+				.getResultList();
+		
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getEvolutionVentes() {
+		MessageService.getGlobalMap().put("NO_ETS", true);
+		
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(mtt_total_net) as montant, date_journee "
+				+ "from JourneePersistant "
+				+ "where 1=1 "
+				+ (ContextAppli.IS_FULL_CLOUD() || ContextAppli.IS_CLOUD_MASTER() ? ("and opc_etablissement.id="+ContextAppli.getEtablissementBean().getId()) : " ")
+				+ " group by year(date_journee), month(date_journee), day(date_journee) "
+				+ " order by date_journee asc ")
+				.getResultList();
+		MessageService.getGlobalMap().remove("NO_ETS");
+		
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getEvolutionAchats() {
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(montant_ttc) as montant, date_mouvement "
+				+ "from MouvementPersistant "
+				+ "where type_mvmnt='a' "
+				+ "group by year(date_mouvement), month(date_mouvement), day(date_mouvement) "
+				+ "order by date_mouvement asc ")
+				.getResultList();
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getEvolutionDepences() {
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(montant) as montant, date_mouvement "
+				+ "from ChargeDiversPersistant "
+				+ "where sens='D' "
+				+ "group by year(date_mouvement), month(date_mouvement), day(date_mouvement)  "
+				+ "order by date_mouvement asc ")
+				.getResultList();
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getEvolutionRecettes() {
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(montant) as montant, date_mouvement "
+				+ "from ChargeDiversPersistant "
+				+ "where sens='C' "
+				+ "group by year(date_mouvement), month(date_mouvement), day(date_mouvement)  "
+				+ "order by date_mouvement asc ")
+				.getResultList();
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getRepartitionRecettesPie(Date dtDebut, Date dtFin) {
+		MessageService.getGlobalMap().put("NO_ETS", true);
+		
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(montant) as montant, opc_famille_consommation.libelle "
+				+ "from ChargeDiversPersistant "
+				+ "where sens='C' "
+				+ "and date_mouvement>=:dateDebut and date_mouvement<=:dateFin "
+				+ (ContextAppli.IS_FULL_CLOUD() || ContextAppli.IS_CLOUD_MASTER() ? ("and opc_etablissement.id="+ContextAppli.getEtablissementBean().getId()) : " ")
+				+ "group by opc_famille_consommation.id  "
+				+ "order by date_mouvement asc ")
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin)
+				.getResultList();
+			MessageService.getGlobalMap().remove("NO_ETS");
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getRepartitionDepencesPie(Date dtDebut, Date dtFin) {
+		MessageService.getGlobalMap().put("NO_ETS", true);
+		
+		List<Object[]> listData = dashBoardDao.getQuery("select sum(montant) as montant, opc_famille_consommation.libelle "
+				+ "from ChargeDiversPersistant "
+				+ "where sens='D' "
+				+ "and date_mouvement>=:dateDebut and date_mouvement<=:dateFin "
+				+ (ContextAppli.IS_FULL_CLOUD() || ContextAppli.IS_CLOUD_MASTER() ? ("and opc_etablissement.id="+ContextAppli.getEtablissementBean().getId()) : " ")
+				+ "group by opc_famille_consommation.id ")
+				.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin)
+				.getResultList();
+		MessageService.getGlobalMap().remove("NO_ETS");
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getRepartitionAchatArticlePie(Date dtDebut, Date dtFin,Long familleIncludeId){
+		
+		Set<Long> familleIncludeIds = new HashSet<Long>();
+		if(familleIncludeId != null && !familleIncludeId.toString().equals("-999")) { 
+			List<FamillePersistant> familleAll = familleService.getFamilleEnfants("ST", familleIncludeId, false);
+			for (FamillePersistant famillePersistant : familleAll) {
+				familleIncludeIds.add(famillePersistant.getId());
+			}
+			familleIncludeIds.add(familleIncludeId);
+		}
+		
+		MessageService.getGlobalMap().put("NO_ETS", true);
+		
+		Query query = dashBoardDao.getQuery("select sum(prix_ttc) as montant, opc_article.libelle "
+				+ "from MouvementArticlePersistant "
+				+ "where opc_mouvement.type_mvmnt='a' "
+				+ "and opc_mouvement.date_mouvement>=:dateDebut and opc_mouvement.date_mouvement<=:dateFin "
+				+(familleIncludeIds.size() > 0 ? "and opc_article.opc_famille_stock.id in (:familleIncludeId) ":" ")
+				+ (ContextAppli.IS_FULL_CLOUD() || ContextAppli.IS_CLOUD_MASTER() ? ("and opc_etablissement.id="+ContextAppli.getEtablissementBean().getId()) : " ")
+				+ "group by opc_article.id ");
+		
+		if(familleIncludeIds.size() > 0){
+			query.setParameter("familleIncludeId", familleIncludeIds);
+		}
+		MessageService.getGlobalMap().remove("NO_ETS");
+		
+		List<Object[]> listData = 
+				query.setParameter("dateDebut", dtDebut)
+				.setParameter("dateFin", dtFin)
+				.getResultList();
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getVentesMoisErp() {
+		List<Object[]> listData = dashBoardDao.getNativeQuery("select sum(mtt_commande_net) as montant, month(date_vente) as mois, "
+				+ "year(date_vente) as annee "
+				+ "from vente_mouvement group by month(date_vente) "
+				+ "order by month(date_vente) desc ")
+				.setMaxResults(12)
+				.getResultList();
+		return listData;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Object[]> getMttResultatNetParMois() {
+		List<Object[]> listResult = new ArrayList<>();
+		
+		String qr = "FROM EtatFinancePersistant order by date_etat desc";
+		
+		List<EtatFinancePersistant> listEtat = dashBoardDao.getQuery(qr)
+				.setMaxResults(12)
+				.getResultList(); 
+				
+		for(EtatFinancePersistant etat : listEtat) {
+			Calendar cal = DateUtil.getCalendar(etat.getDate_etat());
+			String monthYear = (cal.get(Calendar.MONTH)+1)+"-"+cal.get(Calendar.YEAR);
+			
+			listResult.add(new Object[] {etat.getMtt_resultat_net(), monthYear});
+		}
+		
+		return listResult;
+	}
+	@Override
+	public Date getLastDateVente(){
+		Date dateMax = (Date) dashBoardDao.getSingleResult(
+				dashBoardDao.getQuery("select max(date_vente) from VenteMouvementPersistant")
+			);
+		
+		return (dateMax == null ? new Date() : dateMax);
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map getRepartitionVenteArticle(Long journeeId, Date dateDebut, Date dateFin, Long familleIncludeId){
+		Set<Long> familleIncludeIds = new HashSet<Long>();
+		if(familleIncludeId != null && !familleIncludeId.toString().equals("-999")) { 
+			List<FamillePersistant> familleAll = familleService.getFamilleEnfants("ST", familleIncludeId, true);
+			for (FamillePersistant famillePersistant : familleAll) {
+				familleIncludeIds.add(famillePersistant.getId());
+			}
+			familleIncludeIds.add(familleIncludeId);
+		}
+		//
+		if(journeeId == null){
+			dateDebut = DateUtil.getStartOfDay(dateDebut);
+			dateFin = DateUtil.getEndOfDay(dateFin);
+		}
+		
+		// Articles
+		Query query = familleService.getNativeQuery("select det.elementId, sum(det.quantite) as qte, sum(det.mtt_total), det.libelle, fam.libelle as famille "
+				+ "from vente_mouvement_article det "
+				+ "inner join vente_mouvement mvm on det.mvm_vente_id=mvm.id "
+				+ "inner join article art on det.article_id=art.id "
+				+ "left join famille fam on art.famille_stock_id=fam.id "
+				+ "where det.article_id is not null and "
+				+ "mvm.date_vente>=:dateDebut and mvm.date_vente<=:dateFin "
+				
+				+(familleIncludeIds.size() > 0 ? "and fam.id in (:familleIncludeId) ":"")
+				+ "and (det.is_annule is null or det.is_annule=0) "
+				+ "group by det.elementId "
+				+ "order by fam.b_left, qte desc");
+
+		query.setParameter("dateDebut", dateDebut);
+		query.setParameter("dateFin", dateFin);
+		
+		if(familleIncludeIds.size() > 0){
+			query.setParameter("familleIncludeId", familleIncludeIds);
+		}
+		List<Object[]> listVenteArticle = query.getResultList();
+		
+		Map<Long, RepartitionBean> mapArticle = new LinkedHashMap<>();
+		for (Object[] data : listVenteArticle) {
+			String libelle = (String) data[3];
+			Long elementId = ((BigInteger) data[0]).longValue();
+			
+			RepartitionBean repMenu = new RepartitionBean();
+			repMenu.setLibelle(libelle);
+			repMenu.setFamille((String) data[4]);
+			repMenu.setElementId(elementId);
+			repMenu.setQuantite(BigDecimalUtil.get(""+data[1]));
+			repMenu.setMontant((BigDecimal)data[2]);
+			
+			mapArticle.put(elementId, repMenu);
+		}
+		
+		//---------------------------------------------------------------------------------------------
+		// Enlever les offres
+		query = familleService.getNativeQuery("select sum(IFNULL(mvm.mtt_reduction, 0)) "
+					+ "from vente_mouvement mvm "
+					+ "where (mvm.is_annule is null or mvm.is_annule=0) and "
+					+ "mvm.date_vente>=:dateDebut and mvm.date_vente<=:dateFin "
+					+ "and (mvm.is_annule is null or mvm.is_annule=0) ");
+			
+		query.setParameter("dateDebut", dateDebut);
+		query.setParameter("dateFin", dateFin);
+		
+		Object offreData = familleService.getSingleResult(query);
+		
+		Map mapRetour = new HashMap();
+		mapRetour.put("ARTS", mapArticle);
+		mapRetour.put("OFFRE", offreData);
+		
+		return mapRetour ;
+	}
+
+	@Override
+	public JourneeVenteErpView getJourneeDetail(Date lastDate) {
+		JourneeVenteErpView jour = (JourneeVenteErpView) dashBoardDao.getSingleResult(
+				dashBoardDao.getQuery("from JourneeVenteView where day(date_vente)=day(:dtRef) "
+						+ "and month(date_vente)=month(:dtRef) "
+						+ "and year(date_vente)=year(:dtRef)")
+				.setParameter("dtRef", lastDate)
+			);
+		
+		return (jour == null ? new JourneeVenteErpView() : jour);
+	} 
+	
+	@Override
+	public Map<ArticlePersistant, BigDecimal[]> calculMargeArticles(){
+		List<ArticlePersistant> listArticles = articleService.getListArticleNonStock(true);
+		Map<ArticlePersistant, BigDecimal[]> mapArticles = new LinkedHashMap<>();
+		for (ArticlePersistant articleP : listArticles) {
+			BigDecimal mttAchat = null;
+			// Calcul prix achat article
+			mttAchat = getComposantsOfArticle(articleP.getList_article(), mttAchat, BigDecimalUtil.get(1));
+			
+			BigDecimal marge = BigDecimalUtil.ZERO;
+			BigDecimal margePourcent = BigDecimalUtil.ZERO;
+			
+			if(!BigDecimalUtil.isZero(articleP.getPrix_vente())){
+				marge = BigDecimalUtil.substract(articleP.getPrix_vente(), mttAchat);
+				margePourcent = BigDecimalUtil.divide(BigDecimalUtil.multiply(marge, BigDecimalUtil.get(100)), articleP.getPrix_vente());
+			}
+			mapArticles.put(articleP, new BigDecimal[]{mttAchat, articleP.getPrix_vente(), marge, margePourcent});
+		}
+		
+		return mapArticles;
+	}
+	private BigDecimal getComposantsOfArticle(List<ArticleDetailPersistant> listDetail, BigDecimal mttAchat, BigDecimal quantiteParent) {
+		for (ArticleDetailPersistant articleDetP : listDetail) {
+			if(!BigDecimalUtil.isZero(articleDetP.getOpc_article_composant().getPrix_achat_ttc())){
+				BigDecimal mttAchatQte = BigDecimalUtil.multiply(quantiteParent, BigDecimalUtil.multiply(articleDetP.getOpc_article_composant().getPrixAchatUnitaireTTC(), articleDetP.getQuantite()));// Unité achat / vente
+				mttAchat = BigDecimalUtil.add(mttAchat, mttAchatQte);
+			}
+			// Ajouter les composants du composant$
+			if(articleDetP.getOpc_article_composant().getList_article().size() > 0) {
+			BigDecimal mttAchatEnfants = getComposantsOfArticle(articleDetP.getOpc_article_composant().getList_article(), mttAchat, articleDetP.getQuantite());
+			mttAchat = BigDecimalUtil.add(mttAchat, mttAchatEnfants);
+			}
+		}        
+        return mttAchat;
+	}
+
+	@Override
+	public Date[] getMinMaxDate() {
+		Object[] dateMinMax = (Object[]) dashBoardDao.getSingleResult(
+				dashBoardDao.getQuery("select min(date_vente), max(date_vente)from VenteMouvementPersistant")
+			);
+		Date[] dateMinMaxDt = new Date[]{(Date)dateMinMax[0], (Date)dateMinMax[1]};
+		
+		return dateMinMaxDt;
+	}
+
+	@Override
+	public List<Object[]> getVentesMois() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}
+
+class SortByQuantite implements Comparator<CaisseMouvementArticlePersistant>{
+	public int compare(CaisseMouvementArticlePersistant o1, CaisseMouvementArticlePersistant o2) {
+		return o2.getQuantite().compareTo(o1.getQuantite()) ;
+	}
+}

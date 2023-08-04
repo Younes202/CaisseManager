@@ -1,0 +1,26 @@
+	#banner_foot_act{
+		display: block;
+		width: 100%;
+		float: left;
+		height: 50px;
+		position: fixed;
+		bottom: 0px;
+		background-color: #d1d1d1;
+		border: 1px solid #FF9800;
+	}
+	#banner_foot_act a{
+		font-size: 15px;
+	    height: 41px;
+	    background-color: black;
+	    float: left;
+	    padding: 8px 7px 0px 5px;
+	    border-radius: 8px;
+	    margin-top: 5px;
+	    border: 1px solid #ff9800;
+	    color: white;
+	    margin-right: 6px;
+	}
+	.ligne-fam-style {
+		font-weight: normal;
+		border-bottom: 1px dotted #c2c2c2;
+	}

@@ -1,0 +1,66 @@
+version.resources=1.07
+context.soft=restau
+#local :installation dans établissement | localConf : conf locale fichier | cloudMaster :cloud master
+context.install=localConf
+
+caisse.cloud.url=http://localhost:8088/admin-manager
+data.path=C://APP_DATA/DIGI_AGRI
+db.name=restau_manager_db
+db.host=localhost
+db.port=3306
+db.user=root
+db.pw=
+instance.url=
+
+api.google.key=
+api.google.api.key=https://maps.googleapis.com/maps/api/directions/json
+
+#Mail--------------------
+mail.smtp=smtp.gmail.com
+mail.port=587
+mail.user=nepasrepondre.caissemanager@gmail.com
+mail.pw=nepasCaisse1233?!
+mail.from=nepasrepondre.caissemanager@gmail.com
+mail.from.noreply=nepasrepondre.caissemanager@gmail.com
+mail.sender=nepasrepondre@caisse-manager.ma
+
+# Project root ---------------------------------------------------
+project.root.path=/
+# Currency
+devise.symbole=Dhs
+devise.html=Dhs
+# Naming rules
+controller.end=Action
+service.end=Service
+dao.end=Dao
+bean.end=Bean
+persistant.end=Persistant
+validator.end=Validator
+
+#Label separator
+default.label.separator=\ \:
+
+# Table ranges
+table.row.range={20, 50, 100, 500}
+
+# Default number of rows in the table
+table.rows.count=20
+
+# Size of frames
+helper.default.height=395
+frame.default.width=700
+frame.default.height=450
+# Max upload buffer size 
+max.buffer.size=1000000
+
+#Excluded alpha group chars
+default=$ / \#  " & ? \u00a7
+alphagpt1=^ % * \u00a4
+alphagpt2=_ - ( ) @ \u00b2
+alphagpt3=+ { }
+alphagpt4==
+
+#Date format
+default.region=fr
+ddMMyyyy.format=dd/MM/yyyy
+ddMMyyyy.full.format=dd/MM/yyyy HH:mm:ss

@@ -1,0 +1,44 @@
+# Employ\u00e9 tableau
+employe.list=Liste des employ\u00e9s
+employe.nom=Nom
+employe.date_naissance=Date de naissance
+# Employ\u00e9
+employe.list=Liste des employ\u00e9s
+employe.nom=Nom
+employe.prenom=Pr\u00e9nom
+employe.numero=Num\u00e9ro
+employe.date_naissance=Date naissance
+employe.date_entree=Date entr\u00e9e
+employe.date_sortie=Date sortie
+employe.nbr_enfant=Nombre enfants
+employe.civilite=Civilit\u00e9
+employe.cnss=CNSS
+employe.cimr=CIMR
+employe.cin=CIN
+employe.is_actif=Est actif
+employe.img=Image
+employe.poste=Poste occup\u00e9
+employe.type_sortie=Type de sortie
+employe.type_contrat=Type de contrat
+employe.telephone=Mobile
+employe.mail=Mail
+
+# Conge
+conge.libelle=Libell\u00e9
+conge.date_debut=Date de d\u00e9but
+conge.date_fin=Date de fin
+conge.is_demi_journee=Demi journ\u00e9e
+conge.taux_remuneration=Taux de r\u00e9mun\u00e9ration
+conge.opc_te_type=Type de cong\u00e9s
+conge.commentaire=Commentaire
+conge.list=Liste des cong\u00e9s
+
+# Salaire
+salaire.montant_brut=Montant brut 
+salaire.montant_net=Montant net
+salaire.nbr_conge=Nbr cong\u00e9s (mois)
+salaire.commentaire=Commentaire
+salaire.libelle=Libell\u00e9
+salaire.date_debut=Date de d\u00e9but
+salaire.date_fin=Date de fin
+salaire.list=Liste des salaires

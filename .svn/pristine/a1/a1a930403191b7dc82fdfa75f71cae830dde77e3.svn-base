@@ -1,0 +1,128 @@
+.error{
+	color: #F44336;
+	font-size: 12px;
+	width:100%;
+	}
+.info{
+	color: blue;
+	font-size: 13px;
+	}
+.question{
+	color: blue;
+	font-size: 13px;
+	color :black;
+	}
+.warning{
+	color: maroon;
+	font-size: 13px;
+	}
+.succes{
+	color: green;
+	font-size: 13px;
+	}
+.developper{
+	color: black;
+	}
+.required{
+	font-weight: bold;
+	font-size: 11px;
+	color: red;
+}
+.datefield{
+	width: 150px;
+}
+.requiredf{
+	background: url('../img/required.png') no-repeat right;
+}
+.spinner {
+ 	position: fixed;
+	right: 5px;
+	bottom: 5px;
+}
+#ui-datepicker-div{
+	z-index: 99999 !important;
+}
+#img-spinner {
+	width: 80px;
+}
+.radio-stl{
+    width: 29px;
+    height: 29px;
+}
+.check-stl{
+	width: 31px !important;
+    height: 31px !important;
+    margin-top: 3px !important;
+}
+
+.btn-u-modal-form{
+	position: absolute;
+    right: 40px;
+    top: 8px;
+    color: #3F51B5;
+}
+.select2{
+	min-width: 50%; 
+}
+.select2-selection.select2-selection--single{
+	height: 33px !important;
+}
+.datepicker {
+	margin-top: 51px;
+}
+.widget-body .form-group{
+	margin-right: 0px;
+}
+
+.widget-header{
+    height: 40px;
+}
+.widget-header a {
+    margin-top: 2px;
+    margin-right: 5px;
+}
+
+.refresh-num{
+	vertical-align: sub;
+}
+
+.refresh-num :hover{
+	color: red;
+}
+
+select, textarea, input[type="text"], input[type="password"], input[type="datetime"], input[type="datetime-local"], input[type="date"], input[type="month"], input[type="time"], input[type="week"], input[type="number"], input[type="email"], input[type="url"], input[type="search"], input[type="tel"], input[type="color"]{
+	color: black !important;
+}
+
+.flexigrid .btn[wact]{
+	border-radius: 15px;
+	height: 20px;
+    padding-top: 0px;
+}
+.flexigrid .dropdown-toggle{
+    height: 19px;
+    padding-top: 0px;
+}
+.flexigrid a[params]{
+	border-radius: 15px;
+	height: 20px;
+    padding-top: 0px;
+}
+.header-title .btn[wact]{
+	border-radius: 5px;
+}
+.btn[params='bck=1']{
+    background-color: #000000;
+    color: white;
+}
+.separator-group{
+	font-size: 13px;
+	font-weight: bold;
+	color: #000000;
+	background-color:#e3efff;
+	text-transform: uppercase;
+}
+.separator-icon{
+	font-size: 13px;
+	color: #000000;
+}

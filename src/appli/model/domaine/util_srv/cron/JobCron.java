@@ -1,0 +1,396 @@
+package appli.model.domaine.util_srv.cron;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.PersistenceUnit;
+
+import org.springframework.scheduling.annotation.Scheduled;
+
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.controller.domaine.util_erp.ContextAppli.TYPE_ECRITURE;
+import appli.model.domaine.administration.persistant.JobPersistant;
+import appli.model.domaine.administration.persistant.MailQueuePersistant;
+import appli.model.domaine.administration.service.ICompteBancaireService;
+import appli.model.domaine.administration.service.IMailUtilService;
+import appli.model.domaine.administration.service.IParametrageService;
+import appli.model.domaine.caisse.service.ICaisseMobileService;
+import appli.model.domaine.caisse.service.impl.NotificationQueuService;
+import appli.model.domaine.compta.persistant.PaiementPersistant;
+import appli.model.domaine.stock.persistant.ChargeDiversPersistant;
+import appli.model.domaine.stock.service.IChargeDiversService;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.ServiceUtil;
+
+@Named
+public class JobCron {
+
+	@Inject
+	private IChargeDiversService chargeDiversService;
+	@Inject
+	private ICompteBancaireService compteBancaireService;
+	@Inject
+	private IParametrageService paramsService;
+	@Inject
+	private IMailUtilService mailUtilService;
+	@Inject
+	private ICaisseMobileService caisseMobileService;
+	
+	private static final long MEGABYTE = 1024L * 1024L;
+	@PersistenceUnit
+	private EntityManagerFactory emf;
+
+//	@Scheduled(cron = "0 0/5 * * * ?") // Every 5 min"0 * * * * ?"
+	@Scheduled(cron="0 30 0 * * ?")
+	public void autoUpdateJob() {
+//		if(ReplicationGenerationEventListener._IS_CLOUD_SYNCHRO_INSTANCE){
+//			return;
+//		}
+		
+		//updateApplication();
+		
+		EntityManager em = emf.createEntityManager();
+		Date startDate = new Date();
+		StringBuilder sb = new StringBuilder();
+		String resume = "";
+		// déclenche le traitement pour les charges divers automatisés
+		
+		Date currentDay = new Date();
+		sb.append("Charges divers recette et dépenses<br>");
+		int cptRecette = 0;
+		int cptDepense = 0;
+		boolean isExecute = false;
+		
+		List<EtablissementPersistant> listEts = em.createQuery("from EtablissementPersistant")
+														.getResultList();
+		
+		for (EtablissementPersistant etsP : listEts) {
+			MessageService.getGlobalMap().put("GLOBAL_ETABLISSEMENT", etsP);
+			List<ChargeDiversPersistant> listCharges = chargeDiversService.getAllTheAutomatedCharge();	
+			//
+			for (ChargeDiversPersistant chargeP : listCharges) {
+				try {
+					Date dateLastExecution = chargeP.getDate_last_auto()==null ? chargeP.getDate_debut_auto() : chargeP.getDate_last_auto();
+					
+					TIME_ENUM timeEnum = chargeP.getFrequence_type().equals("J") ? TIME_ENUM.DAY : TIME_ENUM.MONTH;
+					Date nextDate = DateUtil.addSubstractDate(dateLastExecution, timeEnum, chargeP.getFrequence());
+					
+					if(DateUtil.getDiffDays(nextDate, currentDay) > 0){
+						continue;
+					}
+					
+					em.getTransaction().begin();
+					
+					isExecute = true;
+					
+					if (chargeP.getSens().equals("D")) {
+						cptDepense++;
+						sb.append("Charge de type Dépense "+chargeP.getLibelle()+": <br>");
+					} else {
+						cptRecette++;
+						sb.append("Charge de type Recettes "+chargeP.getLibelle()+": <br>");
+					}
+					sb.append("montant : "+chargeP.getMontant() + "<br>")
+					.append("------------------------------------------");
+					
+					duplicateAutomatedCharge(em, chargeP);
+				
+					resume = cptDepense+" dépenses et "+cptRecette+" recettes";
+				
+		 			// Purger les anciens job
+		 			int delaPurge = 30;
+		 			Date datePurge = DateUtil.addSubstractDate(new Date(), TIME_ENUM.DAY, -delaPurge);
+		 			paramsService.getQuery(em, "delete from JobPersistant where start_date<=:datePurge")
+		 				.setParameter("datePurge", datePurge)
+		 				.executeUpdate();
+		 			
+					// commit
+					em.getTransaction().commit();
+				} catch (Exception e) {
+					em.getTransaction().rollback();
+					// Tracer l'erreur
+					em.getTransaction().begin();	
+					addJobInfos(startDate, resume, sb.toString(), em, "E");
+					em.getTransaction().commit();
+				}
+			}
+		}
+		
+		// Tracer les déclenchements de l'automate
+		if(isExecute) {
+			addJobInfos(startDate, resume, sb.toString(), em, "T");
+		}
+		
+		em.close();
+	}
+	
+	@Scheduled(cron = "0 0/5 * * * ?") // Every 5 min
+//	@Scheduled(cron="0 30 0 * * ?")
+	public void asynJob() {
+		sendMailJob();
+		
+		if(ContextAppli.IS_CLOUD_MASTER() || ContextAppli.IS_FULL_CLOUD()) {
+			jobCmdEnLigne();
+			//Send notifications
+			NotificationQueuService notifService = ServiceUtil.getBusinessBean(NotificationQueuService.class);
+			notifService.sendAllTodayNotification();
+		} else {
+			callGarbageCollector();
+		}
+	}	
+
+	/**
+	 * Gestion de la mémoire RAM
+	 */
+	private void callGarbageCollector() {
+		try {
+			long ramConsume = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())/MEGABYTE;
+			if(ramConsume > 300){
+				System.gc();// Call garbage collector		
+			}	
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void sendMailJob() {
+		EntityManager entityManager = emf.createEntityManager();
+		try {
+			List<MailQueuePersistant> listMail = entityManager.createQuery("from MailQueuePersistant "
+					+ "where date_envoi is null and (nbr_erreur is null or nbr_erreur<=3)")
+					.getResultList();
+			
+			if(listMail != null) {
+				for (MailQueuePersistant mail : listMail) {
+					try {
+						entityManager.getTransaction().begin();
+						boolean isEnvoye = mailUtilService.sendMessageMail(mail);
+				         
+					    // Maj mail -----------------------------------------------
+						if(isEnvoye){
+					         mail.setDate_envoi(new Date());
+						} else {
+							int nbrErr = mail.getNbr_erreur() + 1;
+							mail.setNbr_erreur(nbrErr);
+						}
+						entityManager.merge(mail);
+						entityManager.getTransaction().commit();
+					} catch (Exception e) {
+						entityManager.getTransaction().rollback();
+					}
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			entityManager.close();
+		}
+	}
+	
+	//@Scheduled(cron="0 * * * * ?")
+	private void jobCmdEnLigne() {
+		System.out.println("blaty nchofo ach kain");
+		EntityManager em = emf.createEntityManager();
+		
+		try {
+			em.getTransaction().begin();
+			
+			Date dateRef = DateUtil.addSubstractDate(new Date(), TIME_ENUM.MINUTE, -15);
+			//
+			List<CaisseMouvementPersistant> listMvm = em.createQuery("from CaisseMouvementPersistant "
+					+ "where is_tovalidate=1 and date_souhaite is not null and date_souhaite<=:currDate")
+					.setParameter("currDate", dateRef)
+					.getResultList();
+			
+			for (CaisseMouvementPersistant mvm : listMvm) {
+				caisseMobileService.statutCommande(mvm.getId(), "A");
+			}
+			em.getTransaction().commit();
+		} catch(Exception e) {
+			em.getTransaction().rollback();
+			e.printStackTrace();
+		} finally {
+			em.close();
+		}
+	}
+
+	/**
+	 * 
+	 * @param startDate
+	 * @param code
+	 * @param libelle
+	 * @param entityManager
+	 */
+	private void addJobInfos(Date startDate, String libelle, String log, EntityManager entityManager, String statut) {
+		JobPersistant jobPersistant = new JobPersistant();
+		jobPersistant.setStart_date(startDate);
+		jobPersistant.setEnd_date(new Date());
+		jobPersistant.setStatut(statut);
+		jobPersistant.setJob_label(libelle);
+		jobPersistant.setJob_log(log);
+
+		entityManager.persist(jobPersistant);
+	}
+
+	/**
+	 * @param em
+	 * @param cdp
+	 */
+	public void duplicateAutomatedCharge(EntityManager em, ChargeDiversPersistant cdp) {
+		if(BigDecimalUtil.isZero(cdp.getMontant())){
+			return;
+		}
+		
+		List<PaiementPersistant> listPaiement = null;
+		if(cdp.getList_paiement() != null){
+			listPaiement = new ArrayList<>(cdp.getList_paiement());			
+		}
+		
+		Date currentDate = new Date();
+		// Maj last exécution
+		cdp.setDate_last_auto(currentDate);
+		em.merge(cdp);
+
+		// Duplication de la charge
+		ChargeDiversPersistant chargeNew = (ChargeDiversPersistant) ReflectUtil.cloneBean(cdp);
+		chargeNew.setId(null);
+		chargeNew.setDate_creation(currentDate);
+		chargeNew.setDate_fin_auto(null);
+		chargeNew.setDate_debut_auto(null);
+		chargeNew.setDate_last_auto(null);
+		chargeNew.setIs_active(null);
+		chargeNew.setIs_automatique(null);
+		chargeNew.setFrequence(null);
+		chargeNew.setFrequence_type(null);
+		//
+		chargeNew = em.merge(chargeNew);
+		
+		// Ecriture comptable
+		TYPE_ECRITURE source = chargeNew.getSens().equals("D") ? TYPE_ECRITURE.DEPENSE : TYPE_ECRITURE.RECETTE;
+		compteBancaireService.mergePaiements(source, listPaiement, chargeNew.getOpc_fournisseur(), chargeNew.getId(), chargeNew.getLibelle(), chargeNew.getSens(), chargeNew.getDate_mouvement());
+	}
+	
+	 /**
+     * @param httpUtil
+     */
+//    public void updateApplication() {
+	
+//	try{
+//	String cloudUrl = StrimUtil.getGlobalConfigPropertie("caisse.cloud.url")+"/update";
+//	String codeAuth = StrimUtil.getGlobalConfigPropertie("caisse.code.auth");
+//	// Sauvegarder les options d'abonnement + base de données
+//	String retourAbonnement = FileUtilController.callURL(cloudUrl+"?mt=abonmnt&auth="+codeAuth);
+//	
+//	// 0: abonnement,     1:conf,            2:cle crytptage client               3:isNewVersion
+//	String[] retourArray = null;
+//	if(StringUtil.isNotEmpty(retourAbonnement)){
+//		retourArray = retourAbonnement.split("\\|");
+//	}
+//	// Maj application
+//	if(retourArray != null && StringUtil.isTrue(retourArray[3])){
+//		ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor)ServiceUtil.getBusinessBean("taskExecutor");
+//    	taskExecutor.submit(new Callable<Object>() {
+//            public Object call() throws Exception {
+			//    	EtablissementPersistant restauP = (EtablissementPersistant) chargeDiversService.findAll(EtablissementPersistant.class).get(0);
+			//    	EtablissementPersistant restaurant = (EtablissementPersistant) chargeDiversService.findById(EtablissementPersistant.class, restauP.getId());
+			//		
+			//    	try {
+			//    		Date currentDateVersion = restaurant.getDate_soft();
+			//    		
+			//	    	String cloudUrl = StrimUtil.getGlobalConfigPropertie("caisse.cloud.url")+"/update";
+			//	    	String codeAuth = StrimUtil.getGlobalConfigPropertie("caisse.code.auth"); //getRestaurant().getCode_authentification();
+			//			String retourCheckCaisse = FileUtilController.callURL(cloudUrl+"?mt=checkv&auth="+codeAuth+"&tp="+StrimUtil.getGlobalConfigPropertie("context.soft"));
+			//			boolean isCaisseUpdate = (""+retourCheckCaisse).trim().equals("true");
+			//			
+			//			if(!isCaisseUpdate) {
+			//				return;
+			//			}
+			//			
+			//			String tomcatPath = StrimUtil.getGlobalConfigPropertie("caisse.tomcat.dir");
+			//	    	String tempPath = StrimUtil.getGlobalConfigPropertie("caisse.dir.temp");
+			//	    	
+			//			// Création du répertoire si'il n'existe pas
+			//			if (!new File(tempPath).exists()) {
+			//				new File(tempPath).mkdirs();
+			//			}
+			//			
+			//			String callURL = FileUtilController.callURL(cloudUrl+"?mt=info&auth="+codeAuth+"&tp="+StrimUtil.getGlobalConfigPropertie("context.soft"));
+			//			
+			//			if(StringUtil.isEmpty(callURL)) {
+			//				return;
+			//			}
+			//			String[] retourInfos = StringUtil.getArrayFromStringDelim(callURL, "|");
+			//			String instanceName = retourInfos[0];
+			//			String typeAppli = retourInfos[1];
+			//			String version = retourInfos[2];
+			//			Date dateVersion = DateUtil.stringToDate(retourInfos[3], "ddMMyyyy");
+			//	
+			//			// Maj caisse
+			//			File pathTempBackTarget = new File(tempPath + "/" + instanceName+".war");
+			//			FileUtils.copyURLToFile(new URL(cloudUrl + "?mt=download&auth="+codeAuth+"&tp="+StrimUtil.getGlobalConfigPropertie("context.soft")), pathTempBackTarget);
+			//		
+			//			// Copier dans le répertoire 
+			//			File pathBackTarget = new File(tomcatPath+"/webapps/"+instanceName+".war");
+			//			
+			//			if(pathBackTarget.exists()) {
+			//				String backupDir = ""; 
+			//				if(tomcatPath.indexOf("/") != -1) {
+			//					backupDir = tomcatPath + "/BACKUP";	
+			//				} else {
+			//					backupDir = tomcatPath + "\\BACKUP";
+			//				}
+			//				
+			//				if(!new File(backupDir).exists()){
+			//					new File(backupDir).mkdirs();
+			//				}
+			//				// Copier le fichier pour les cas ou la maj à échouée
+			//				File warBackup = new File(backupDir+"/"+instanceName+"_backup.war");
+			//				FileUtilController.copyFile(pathBackTarget, warBackup);
+			//				
+			//				// Supprimer le war de tomcat
+			//				if(pathBackTarget.exists()){
+			//					FileUtils.forceDelete(pathBackTarget);
+			//				}
+			//	    	}
+			//			
+			//			// Copier le fichier en modifiant la date
+			//			pathBackTarget.setLastModified(new Date().getTime());
+			//			FileUtilController.copyFile(pathTempBackTarget, pathBackTarget);
+			//			
+			//			// Suppression du fichier
+			//			FileUtils.forceDelete(pathTempBackTarget);
+			//
+			//			// Maj cloud
+			//			FileUtilController.callURL(cloudUrl+"?mt=update&auth="+codeAuth+"&tp="+StrimUtil.getGlobalConfigPropertie("context.soft"));
+			//			// Maj version locale
+			//			userService.updateFlagUpdate(version, dateVersion);
+			//			
+			//			// Tempo de 30 secode pour redemarrage tomcat
+			//			Thread.sleep(30000);
+			//			
+			//			// Passage des scripts de maj
+			//			// Comparaison des versions
+			//			paramsService.executerInitScript(currentDateVersion);
+			//		} catch (Exception e) {
+			// 			e.printStackTrace();
+			//		}
+	
+				//  }
+				//});
+				//}
+				//} catch(Exception e){
+				//e.printStackTrace();
+				//}
+//    }
+}

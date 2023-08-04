@@ -1,0 +1,416 @@
+package appli.model.domaine.stock.service.impl;
+
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.Query;
+
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.stock.bean.FamilleBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.personnel.persistant.EmployePersistant;
+import appli.model.domaine.personnel.persistant.FamilleEmployePersistant;
+import appli.model.domaine.stock.dao.IFamilleDao;
+import appli.model.domaine.stock.persistant.FamilleConsommationPersistant;
+import appli.model.domaine.stock.persistant.FamilleCuisinePersistant;
+import appli.model.domaine.stock.persistant.FamilleFournisseurPersistant;
+import appli.model.domaine.stock.persistant.FamilleMenuPersistant;
+import appli.model.domaine.stock.persistant.FamillePersistant;
+import appli.model.domaine.stock.persistant.FamilleStockPersistant;
+import appli.model.domaine.stock.service.IFamilleService;
+import appli.model.domaine.stock.validator.FamilleValidator;
+import appli.model.domaine.vente.persistant.CaissePersistant;
+import framework.controller.ContextGloabalAppli;
+import framework.controller.bean.PagerBean;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.annotation.validator.WorkModelClassValidator;
+import framework.model.common.annotation.validator.WorkModelMethodValidator;
+import framework.model.common.util.BooleanUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.service.GenericJpaService;
+
+
+@WorkModelClassValidator(validator=FamilleValidator.class)
+@Named
+public class FamilleService extends GenericJpaService<FamilleBean, Long> implements IFamilleService{
+	@Inject
+	IFamilleDao familleDao;
+	
+	public enum FAMILLE_TYPE_ENUM {CU, ST, CO, FO, SP, TA, EM};
+	
+	@Override
+	@Transactional
+	@WorkModelMethodValidator
+	public void createFamille(FamilleBean typeFamilleBean){
+		familleDao.createFamille(typeFamilleBean);
+	}
+	
+	@Override
+	public FamillePersistant getFamilleParent(Long familleId){
+		FamillePersistant familleP = findById(familleId);
+		
+		return familleDao.getFamilleParent(familleP);
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+    public List<FamillePersistant> getFamilleParent(String type, Long famId) {
+		String entity = null;
+		if( type.equals("CU")){
+			entity = FamilleCuisinePersistant.class.getSimpleName();
+		} else if( type.equals("FO")){
+			entity = FamilleFournisseurPersistant.class.getSimpleName();
+		} else if( type.equals("ST")){
+			entity = FamilleStockPersistant.class.getSimpleName();
+		} else if( type.equals("CO")){
+			entity = FamilleConsommationPersistant.class.getSimpleName();
+		} else if( type.equals("MNU")){
+			entity = FamilleMenuPersistant.class.getSimpleName();
+		} else if( type.equals("EM")){
+			entity = FamilleEmployePersistant.class.getSimpleName();
+		}
+		
+		List<FamillePersistant> listFamille = null;
+		FamillePersistant famille = (FamillePersistant) getSingleResult(getQuery("from "+entity+" where id=:id")
+				.setParameter("id", famId));
+		if(famille != null) {
+			listFamille = getQuery("from "+entity
+	                + " where b_left<=:bLeft and b_right>=:bRight and code!='ROOT' "
+	                + " order by b_left asc")
+	                .setParameter("bLeft", famille.getB_left())
+	                .setParameter("bRight", famille.getB_right())
+	                .getResultList();
+		}
+        
+        return listFamille;
+    }
+	
+	@Override
+	public Map<String, Map<String, List<Object[]>>> getDetailEmp() {
+	    Map<String, Map<String, List<Object[]>>> mapTraite = new HashMap<>();
+	    int allUnconfirmedEmp =0;
+        int allConfirmedEmp=0;
+        
+      
+
+	    List<FamillePersistant> listFamille = getQuery("from FamillePersistant "
+	            + "where code != 'ROOT' and level = 1 and type = 'EM'").getResultList();
+	    for (FamillePersistant fam : listFamille) {
+	        List<FamillePersistant> list = getFamilleEnfants("EM", fam.getId(), false);
+	        int unConfirmedEmp =0;
+	        int confirmedEmp=0;
+	        
+	        Map<String, List<Object[]>> innerMap = new TreeMap<>(Comparator.comparingInt(key -> {
+	            int level = extractLevelFromInnerKey(key);
+	            return level;
+	        }));
+	        for (FamillePersistant famdet : list) {
+	        	
+	        	List<Object[]> list2 = getQuery(
+	                    "FROM EmployePersistant e " +
+	                    "WHERE e.opc_famille.id =:familleId ")
+	        	        .setParameter("familleId", famdet.getId())
+	        	        .getResultList(); 
+			        	if(list2.size()> 0) {
+				        	if(famdet.getLevel()==2) {
+				        		confirmedEmp=confirmedEmp+list2.size() ;
+				        	}
+				        	if(famdet.getLevel()>2)  {
+								unConfirmedEmp=unConfirmedEmp+list2.size();
+				        	}
+			        	}
+	        	
+	               // Return the length of the string, which is the number of digits
+	        	   
+	        	   String strNum1 = Integer.toString(famdet.getLevel());
+	               String strNum2 = Long.toString(famdet.getId());
+
+	               // Concatenate the strings
+	               int key_part1 = Integer.valueOf(strNum1 + strNum2);
+
+	             
+	        	String key = key_part1 + "-" + famdet.getLibelle() ;
+	            if(key != null && list2.size() > 0) {
+	            innerMap.put(key, list2);
+	            }
+	            
+	            
+	        }  
+	        allConfirmedEmp+=confirmedEmp;
+            allUnconfirmedEmp+=unConfirmedEmp;
+	        String outerKey = fam.getLibelle()+"-"+confirmedEmp+"-"+unConfirmedEmp;
+	        if(outerKey != null && innerMap.size() > 0) {
+	        mapTraite.put(outerKey, innerMap);
+	        }
+	    }
+	    Map<String, List<Object[]>> totalsMap = new HashMap<>();
+        List<Object[]> totalsList = new ArrayList<>();
+        totalsList.add(new Object[]{allConfirmedEmp, allUnconfirmedEmp});
+        totalsMap.put("totals", totalsList);
+        mapTraite.put("TotalEmp", totalsMap); 
+        
+	    return mapTraite;
+	}
+
+
+	private int extractLevelFromInnerKey(String innerKey) {
+	    String[] parts = innerKey.split("-");
+	    if (parts.length > 1) {
+	        String levelString = parts[0];
+	        try {
+	            return Integer.parseInt(levelString);
+	        } catch (NumberFormatException e) {
+	            // Handle parsing error if needed
+	        }
+	    }
+	    return 0; // Default level if unable to extract
+	}
+
+    
+	
+	@Override
+    public List<FamillePersistant> getFamilleEnfants(String type, Long famId, 
+    		boolean excludeDisabled, PagerBean pagerBean, boolean isOneLevel) {
+		if(famId == null){
+			return null;
+		}
+		String entity = null;
+		if( type.equals("CU")){
+			entity = FamilleCuisinePersistant.class.getSimpleName();
+		} else if( type.equals("FO")){
+			entity = FamilleFournisseurPersistant.class.getSimpleName();
+		} else if( type.equals("ST")){
+			entity = FamilleStockPersistant.class.getSimpleName();
+		} else if( type.equals("CO")){
+			entity = FamilleConsommationPersistant.class.getSimpleName();
+		} else if( type.equals("MNU")){
+			entity = FamilleMenuPersistant.class.getSimpleName();
+		} else if( type.equals("EM")){
+			entity = FamilleEmployePersistant.class.getSimpleName();
+		}
+		
+		FamillePersistant famille = (FamillePersistant) getQuery("from "+entity+" where id=:id")
+				.setParameter("id", famId).getSingleResult();
+        String req = "from "+entity
+                + " where b_left>:bLeft and b_right<:bRight and code!='ROOT' and code != 'GEN' ";
+        
+        if(isOneLevel){
+        	req += "and level=:level";
+        }
+        
+        if(excludeDisabled) {
+        	req = req + " and (is_disable is null or is_disable=0)";
+        }
+        
+        if(pagerBean != null){
+        	// Count
+        	Long count = (Long) getQuery("select count(0) "+req)
+            		.setParameter("bLeft", famille.getB_left())
+            		.setParameter("bRight", famille.getB_right()).getSingleResult(); 
+    		pagerBean.setNbrLigne(count.intValue());
+        }
+        
+        req = req + " order by b_left asc";
+        
+        Query query = getQuery(req)
+        		.setParameter("bLeft", famille.getB_left())
+        		.setParameter("bRight", famille.getB_right());      
+        
+        if(isOneLevel){
+        	query.setParameter("level", famille.getLevel()+1);
+        }
+        if(pagerBean != null){
+        	query.setMaxResults(pagerBean.getElementParPage());
+        	query.setFirstResult(pagerBean.getStartIdx());
+        }
+        
+		List<FamillePersistant> listFamille = query.getResultList();
+        
+        return listFamille;
+	}
+	
+	
+	
+	@Override
+    public List<FamillePersistant> getFamilleEnfantsOnLevel(String type, Long famId, 
+    		boolean excludeDisabled) {
+		return getFamilleEnfants(type, famId, excludeDisabled, null, true);
+    }
+	@Override
+    public List<FamillePersistant> getFamilleEnfants(String type, Long famId, 
+    		boolean excludeDisabled) {
+		return getFamilleEnfants(type, famId, excludeDisabled, null, false);
+    }
+	
+	/**
+	 * 
+	 */
+	@Override
+	@Transactional
+	@WorkModelMethodValidator
+	public void deleteFamille(Long id){ 
+		familleDao.deleteFamille(id);
+	}
+
+	@Override
+	@Transactional
+	@WorkModelMethodValidator
+	public void updateFamille(FamilleBean familleBean) {
+		familleDao.updateFamille(familleBean);
+	}
+	
+	@Override
+	public FamillePersistant getFamilleRoot(String type) {
+		return familleDao.getFamilleRoot(type);
+	}
+	
+	@Override
+	public List<FamillePersistant> getListeFamille(String type, boolean excludeParent, boolean isActifOnly) {
+		String entity = null;
+		if( type.equals("CU")){
+			entity = FamilleCuisinePersistant.class.getSimpleName();
+		} else if( type.equals("FO")){
+			entity = FamilleFournisseurPersistant.class.getSimpleName();
+		} else if( type.equals("ST")){
+			entity = FamilleStockPersistant.class.getSimpleName();
+		} else if( type.equals("CO")){
+			entity = FamilleConsommationPersistant.class.getSimpleName();
+		} else if( type.equals("MNU")){
+			entity = FamilleMenuPersistant.class.getSimpleName();
+		} else if( type.equals("EM")){
+			entity = FamilleEmployePersistant.class.getSimpleName();
+		}
+		
+		String req = "from "+entity+" where code != 'GEN' ";
+		if(excludeParent){
+			req = req + " and code!=:code";
+		}
+		if(isActifOnly){
+			req = req + " and (is_disable is null or is_disable=0) ";
+		}
+		req = req + " order by b_left";
+		
+		Query query = getQuery(req);
+		if(excludeParent){
+			query.setParameter("code", "ROOT");
+		}
+			
+		return query.getResultList();
+	}
+
+	@Override
+	public String generateCode(Long elementId, String type) {
+		return familleDao.getNextCode(elementId, type);
+	}
+	
+	@Override
+	@Transactional
+	public void activerDesactiverElement(Long familleId) {
+		FamillePersistant famillePersistant = familleDao.findById(familleId);
+		famillePersistant.setIs_disable(BooleanUtil.isTrue(famillePersistant.getIs_disable()) ? false : true);
+		
+		List<FamillePersistant> listEnfant = getFamilleEnfants(famillePersistant.getType(), familleId, false);
+		if(listEnfant != null) {
+			for (FamillePersistant famP : listEnfant) {
+				famP.setIs_disable(BooleanUtil.isTrue(famillePersistant.getIs_disable()) ? true : false);
+			}
+		}
+		//
+		getEntityManager().merge(famillePersistant);
+	}
+	
+	@Override
+	public void changerOrdre(Map<String, Object> mapOrder, String type) {
+		familleDao.changerOrdre(mapOrder, type);
+	}
+
+	@Override
+	public List<FamillePersistant> getListeFamille(List<Long> ids, boolean excludeDisabled) {
+		boolean isControleEmp = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("CTRL_EMPLACEMENT"));
+		String req = "from FamilleStockPersistant fam ";
+		if(!isControleEmp) {
+			if(ids == null || ids.size() == 0) {
+				req += " where code='ROOT' a"; 
+			} else {
+				req += " where code='ROOT' or id in (:ids)";
+			}
+			req += " and ";
+		} else {
+			req += " where ";
+		}
+		
+		if(excludeDisabled){
+			req = req + " (is_disable is null or is_disable=0) ";
+		}
+		req = req + "order by b_left";
+		
+		Query query = getQuery(req);
+		
+		if(ids != null && ids.size() > 0 && !isControleEmp) {
+			query.setParameter("ids", ids);
+		}
+		
+		return query.getResultList();
+	}
+	
+	@Override
+	public int getListFamilleArticleSize(Long famId) {
+		return ((Long) getQuery("select count(0) from ArticlePersistant "
+				+ "where (is_disable is null or is_disable=0) "
+				+ "and opc_famille_stock.id=:famId "
+				+ "and (is_stock is null or is_stock=0)")
+					.setParameter("famId", famId)
+					.getSingleResult()).intValue();
+	}
+
+	@Override
+	@Transactional
+	public EtablissementPersistant mergeConfRaz(Long familleBFroide, Long familleBChaude) {
+		Long etsId = ContextAppli.getEtablissementBean().getId();
+		EtablissementPersistant restauP = (EtablissementPersistant) findById(EtablissementPersistant.class, etsId);
+		//
+		restauP.setFam_boisson_froide(familleBFroide);
+		restauP.setFam_boisson_chaude(familleBChaude);
+		//
+		getEntityManager().merge(restauP);
+		
+		return restauP;
+	}
+	
+	@Override
+	public List<CaissePersistant> getListCaisseActive(String typeCaisse, boolean activeOnly) {
+		String request = "from CaissePersistant where type_ecran=:type ";
+		if(activeOnly){
+			request = request + "and (is_desactive is null or is_desactive=false)";
+		}
+		request = request + " order by reference";
+		
+		return getQuery(request).setParameter("type", typeCaisse).getResultList();
+	}
+
+	@Override
+	public FamillePersistant geteFamilleByCode(String code) {
+		return (FamillePersistant) getSingleResult(getQuery("from FamillePersistant where code=:code").setParameter("code", code));
+	}
+	
+	@Override
+	public List<FamillePersistant> getFamilleParentEnfantsByGrpCode(Class<?> typeClass, String code) {
+		FamillePersistant familleParent = (FamillePersistant) getSingleResult(getQuery("from "+typeClass.getSimpleName()+" where level!=1 "
+				+ " and code=:familleCode")
+			.setParameter("familleCode", code));
+		
+		return getQuery("from "+typeClass.getSimpleName()+" where level!=1 and b_left>=:bLeft and b_right<=:bRight "
+				+ "order by b_left asc")
+				.setParameter("bLeft", familleParent.getB_left())
+				.setParameter("bRight", familleParent.getB_right())
+				.getResultList();
+	}
+}

@@ -1,0 +1,100 @@
+package appli.model.domaine.stock.service.impl;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import javax.inject.Named;
+import javax.persistence.EntityManager;
+
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.stock.bean.LotArticleBean;
+import appli.model.domaine.stock.persistant.LotArticlePersistant;
+import appli.model.domaine.stock.persistant.MouvementArticlePersistant;
+import appli.model.domaine.stock.persistant.MouvementPersistant;
+import appli.model.domaine.stock.service.ILotArticleService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+public class LotArticleService extends GenericJpaService<LotArticleBean, Long> implements ILotArticleService{
+	
+	@Transactional
+	@Override
+	public void manageLotAchat(MouvementPersistant mvmPer) {
+		if(mvmPer == null){
+			return;
+		}
+		EntityManager em = getEntityManager();
+		
+		if(mvmPer.getId() != null){
+			getQuery("delete from LotArticlePersistant where opc_mvm.id=:mvmId")
+				.setParameter("mvmId", mvmPer.getId())
+				.executeUpdate();
+		}
+		em.flush();
+		//
+		for(MouvementArticlePersistant mvmArtP : mvmPer.getList_article()){
+			if(mvmArtP.getDate_peremption() == null){
+				continue;
+			}
+			LotArticlePersistant lotPer = new LotArticlePersistant();
+			lotPer.setDate_peremption(mvmArtP.getDate_peremption());
+			lotPer.setOpc_article(mvmArtP.getOpc_article());
+			lotPer.setOpc_mvm_article(mvmArtP);
+			lotPer.setOpc_mvm(mvmPer);
+			lotPer.setOpc_emplacement(mvmPer.getOpc_destination());
+			lotPer.setQuantite(mvmArtP.getQuantite());
+			
+			lotPer = em.merge(lotPer);
+			mvmArtP.setOpc_lot_article(lotPer);
+			
+			em.merge(mvmArtP);
+			em.flush();
+		}
+	}
+	
+	
+	@Transactional
+	@Override
+	public void manageArticleLot(Long articleId, Long emplacement_id, BigDecimal quantite, String sens) {
+		// Si achat avec date péremption, alors ajout d'un lot
+		EntityManager em = getEntityManager();
+		
+		List<LotArticlePersistant> listLotArt = getQuery("from LotArticlePersistant where opc_article.id=:articleId and opc_emplacement.id=:emplId order by date_peremption asc")
+				.setParameter("articleId", articleId)
+				.setParameter("emplId", emplacement_id)
+				.getResultList(); // 
+
+		if(listLotArt != null && listLotArt.size() > 0) {
+			LotArticlePersistant lotArtPer = listLotArt.get(0);
+			if(quantite.compareTo(lotArtPer.getQuantite()) == 0) {
+				delete(lotArtPer.getId());
+			} else if("E".equals(sens)){
+				BigDecimal newQte = BigDecimalUtil.substract(quantite, lotArtPer.getQuantite());
+				deleteLot(lotArtPer.getId());
+//				destockageFromLot(articleId, emplacement_id, newQte);
+			} else { 
+				lotArtPer.setQuantite(BigDecimalUtil.substract(lotArtPer.getQuantite(), quantite));
+				em.merge(lotArtPer);
+			}
+		}
+		em.flush();
+	}
+	
+	@Override
+	@Transactional
+	public void deleteLot(Long lotId) {
+		MouvementArticlePersistant mvmArt = (MouvementArticlePersistant) getSingleResult(getQuery("from MouvementArticlePersistant where opc_lot_article.id=:lotId")
+				.setParameter("lotId", lotId));
+		EntityManager em = getEntityManager();
+		if(mvmArt != null) {
+			mvmArt.setOpc_lot_article(null);
+			em.merge(mvmArt);
+		}
+		em.flush();
+		delete(lotId);
+		em.flush();
+	}
+
+}

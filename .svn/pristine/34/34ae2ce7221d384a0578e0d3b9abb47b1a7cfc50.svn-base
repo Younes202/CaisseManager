@@ -1,0 +1,13 @@
+package appli.model.domaine.stock.service;
+
+
+import java.math.BigDecimal;
+
+import appli.controller.domaine.stock.bean.LotArticleBean;
+import appli.model.domaine.stock.persistant.MouvementArticlePersistant;
+import framework.model.service.IGenericJpaService;
+
+public interface ILotArticleService extends IGenericJpaService<LotArticleBean, Long>{
+//	void manageArticleLot(MouvementArticlePersistant mvmArtPer, Long articleId, Long emplacement_id, BigDecimal quantite, String sens);
+//	void deleteLot(Long lotId);
+}

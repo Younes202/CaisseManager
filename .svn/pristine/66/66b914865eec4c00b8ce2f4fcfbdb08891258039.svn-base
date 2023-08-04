@@ -1,0 +1,254 @@
+
+package appli.controller.domaine.caisse.action;
+
+
+
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+
+import org.hibernate.criterion.Order;
+
+import appli.model.domaine.administration.persistant.UserPersistant;
+import appli.model.domaine.caisse.service.IJourneeService;
+import appli.model.domaine.dashboard.service.IDashBoardService;
+import appli.model.domaine.stock.persistant.FamilleCuisinePersistant;
+import appli.model.domaine.stock.persistant.FamillePersistant;
+import appli.model.domaine.stock.service.IFamilleService;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.component.complex.table.RequestTableBean;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.annotation.WorkController;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.StringUtil;
+
+/**
+ * @author 
+ *
+ */
+@WorkController(nameSpace="dash", jspRootPath="/domaine/dashboard/") 
+public class DashCaisseAction extends ActionBase {
+	
+	@Inject
+	private IDashBoardService dashBoardService;
+	@Inject
+	private IFamilleService familleService;
+	@Inject
+	private IJourneeService journeeService;
+	
+	/**
+	 * 
+	 * @param httpUtil
+	 */
+	public void work_init(ActionUtil httpUtil)  {
+		
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_dashboard(ActionUtil httpUtil){
+		// Ecarts caisse par employé
+		loadDataEcart(httpUtil);
+		// Taux annulation par employé
+		
+		init_data_employe(httpUtil);
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/dashboard/dashboard_caisse.jsp");
+	}
+
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void init_data_employe(ActionUtil httpUtil){
+		Date dtDebut = null, dtFin = null;
+		
+		// Date début
+		String dateDebutParam = httpUtil.getParameter("empl_dt_debut");
+		if(StringUtil.isEmpty(dateDebutParam)) {
+			JourneePersistant dateLastJ = journeeService.getLastJournee();
+			Date dateLast = null;
+			if(dateLastJ == null) {
+				dateLast = new Date();
+			} else {
+				dateLast = dateLastJ.getDate_journee();
+			}
+			
+			Calendar cal = DateUtil.getCalendar(dateLast);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(dateDebutParam);
+		}
+		
+		// Date fin
+		String dateFinParam = httpUtil.getParameter("empl_dt_fin");
+		if(StringUtil.isEmpty(dateFinParam)) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(dateFinParam);
+		}
+		
+		httpUtil.setRequestAttribute("curr_empl_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_empl_dtFin", dtFin);
+		
+		Map<String, List<BigDecimal>> data = dashBoardService.getDataChiffresEmploye(dtDebut, dtFin);
+		httpUtil.setRequestAttribute("dataEmploye", data);
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/dashboard/dashboard_caisse_employe.jsp");
+	}
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void loadDataEcart(ActionUtil httpUtil) {
+		Date dtDebut = null, dtFin = null;
+		
+		// Date début
+		String dateDebutParam = httpUtil.getParameter("ecart_dt_debut");
+		if(StringUtil.isEmpty(dateDebutParam)) {
+			JourneePersistant dateLastJ = journeeService.getLastJournee();
+			Date dateLast = null;
+			if(dateLastJ == null) {
+				dateLast = new Date();
+			} else {
+				dateLast = dateLastJ.getDate_journee();
+			}
+			
+			Calendar cal = DateUtil.getCalendar(dateLast);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(dateDebutParam);
+		}
+		
+		// Date fin
+		String dateFinParam = httpUtil.getParameter("ecart_dt_fin");
+		if(StringUtil.isEmpty(dateFinParam)) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(dateFinParam);
+		}
+		
+		httpUtil.setRequestAttribute("curr_ecart_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_ecart_dtFin", dtFin);
+		
+		List<Object[]> ecartEvolution = dashBoardService.getEcartEmploye(dtDebut, dtFin);
+		ecartEvolution = (ecartEvolution==null) ? new ArrayList<Object[]>() : ecartEvolution;
+		httpUtil.setRequestAttribute("ecartEvol", ecartEvolution);
+		
+		
+		// Date début
+		if(StringUtil.isEmpty(httpUtil.getParameter("liv_dt_debut"))) {
+			JourneePersistant dateLastJ = journeeService.getLastJournee();
+			Date dateLast = null;
+			if(dateLastJ == null) {
+				dateLast = new Date();
+			} else {
+				dateLast = dateLastJ.getDate_journee();
+			}
+			Calendar cal = DateUtil.getCalendar(dateLast);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtDebut = DateUtil.stringToDate("01"+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtDebut = DateUtil.stringToDate(httpUtil.getParameter("liv_dt_debut"));
+		}
+		
+		// Date fin
+		if(StringUtil.isEmpty(httpUtil.getParameter("liv_dt_fin"))) {
+			Calendar cal = DateUtil.getCalendar(dtDebut);
+			int mt = cal.get(Calendar.MONTH)+1;
+			String mois = (""+mt).length() == 1 ? "0"+mt : ""+mt;
+			dtFin = DateUtil.stringToDate(cal.getActualMaximum(Calendar.DAY_OF_MONTH)+"/"+mois+"/"+cal.get(Calendar.YEAR));
+		} else {
+			dtFin = DateUtil.stringToDate(httpUtil.getParameter("liv_dt_fin"));
+		}
+		
+		httpUtil.setRequestAttribute("curr_liv_dtDebut", dtDebut);
+		httpUtil.setRequestAttribute("curr_liv_dtFin", dtFin);
+		
+		List<Object[]> livraisonEmploye = dashBoardService.getLivraisonParutilisateur(dtDebut, dtFin);
+		httpUtil.setRequestAttribute("livraisonEvol", livraisonEmploye);
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/dashboard/dashboard_caisse_ecarts.jsp");
+	}
+	
+	public void loadDataChangeQte(ActionUtil httpUtil){
+		Date dateRef = null;
+		JourneePersistant lastJrn = journeeService.getLastJournee();
+		if(lastJrn != null){
+			dateRef = lastJrn.getDate_journee();
+		} else{
+			dateRef = new Date();
+		}
+		
+		// Initialiser les listes pour les filtres
+		httpUtil.setRequestAttribute("listUser", familleService.findAll(UserPersistant.class, Order.asc("login")));
+		
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_mouvement_annulation");
+		RequestTableBean cplxTableDet = getTableBean(httpUtil, "list_mouvementDet_annulation");
+		
+		//----------------------------- Date -------------------------
+		Date dateDebut = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateDebut"));
+		Date dateFin = DateUtil.stringToDate(httpUtil.getRequest().getParameter("dateFin"));
+		//
+		if(httpUtil.getRequest().getParameter("is_fltr") == null) {
+			dateDebut = DateUtil.stringToDate(httpUtil.getParameter("dateDebut"));
+			dateFin = DateUtil.stringToDate(httpUtil.getParameter("dateFin"));
+		}
+		
+		if(dateDebut == null) {
+			dateDebut = dateRef;
+			dateFin = dateRef;
+			httpUtil.getDate("dateDebut").setValue(dateDebut);
+			httpUtil.getDate("dateFin").setValue(dateDebut);
+		}
+		
+		if(httpUtil.getParameter("prev") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, -1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, -1);
+		} else if(httpUtil.getParameter("next") != null) {
+			dateDebut = DateUtil.addSubstractDate(dateDebut, TIME_ENUM.DAY, 1);
+			dateFin = DateUtil.addSubstractDate(dateFin, TIME_ENUM.DAY, 1);
+		}
+		
+		dateDebut = DateUtil.getStartOfDay(dateDebut);
+		dateFin = DateUtil.getEndOfDay(dateFin);
+		
+		httpUtil.setRequestAttribute("dateDebut", dateDebut);
+		httpUtil.setRequestAttribute("dateFin", dateFin);
+		
+		JourneePersistant journeeDebut = journeeService.getJourneeOrNextByDate(dateDebut);
+    	JourneePersistant journeeFin = journeeService.getJourneeOrPreviousByDate(dateFin);
+		
+		Map<String, Object> formCriterion = cplxTable.getFormBean().getFormCriterion();
+		formCriterion.put("dateDebut", (journeeDebut!=null?journeeDebut.getId():null));
+		formCriterion.put("dateFin", (journeeFin!=null?journeeFin.getId():null));
+		
+		//-----------------------------------------------------------
+		List<CaisseMouvementPersistant> listCaisseMouvement = (List<CaisseMouvementPersistant>) familleService.findByCriteriaByQueryId(cplxTable, "changeQteMouvement_find", false);
+		httpUtil.setRequestAttribute("list_annulationMouvement", listCaisseMouvement);
+		
+		httpUtil.setDynamicUrl("/domaine/caisse/dashboard/dashboard_caisse_changeQte.jsp");
+	}
+}

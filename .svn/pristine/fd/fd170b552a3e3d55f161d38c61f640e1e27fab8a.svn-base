@@ -1,0 +1,46 @@
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<%
+CaisseMouvementPersistant CURRENT_COMMANDE = (CaisseMouvementPersistant)ControllerUtil.getUserAttribute("CURRENT_COMMANDE", request);
+%>
+
+	<div id="banner_foot_act" style="float: left;width: 100%;height: 50px;position: fixed;bottom: 0px;background-color: #d1d1d1;border-radius: 23px;border: 1px solid #FF9800;">
+     <!-- TOTAL COMMANDE -->
+	 <div id="cmd_total" class="label label-success" style="position: absolute;right: 20px;bottom: 10px;font-size: 22px;font-weight: bold;color: white;border-radius:15px !important;">
+	 
+	 </div>
+			<std:link id="home_lnk" style="color: fuchsia;padding-top: 0px;padding-left: 7px;" classStyle="btn btn-default btn-circle btn-lg btn-menu shiny" action="caisse-web.caisseWeb.init_home" targetDiv="right-div" icon="fa-3x fa fa-home" value="" />
+						
+			<a href="javascript:void(0);" id="calc_lnk" style="color: #262626;font-weight: bold;" class="btn btn-default btn-circle btn-lg btn-menu shiny" data-container="body" data-titleclass="bordered-blue" data-class="" data-toggle="popover" data-placement="top" data-title="" 
+				data-content="<%for(int i=0; i<10; i++){ %><a class='btn btn-blue btn-lg icon-only white btn-circle btn-calc ' href='javascript:void(0);'><%=i %></a><%} %><a class='btn btn-blue btn-lg icon-only white btn-circle btn-calc' href='javascript:void(0);'>C</a>" data-original-title="" title="">
+				<img src="resources/caisse/img/caisse-web/calculator_blue.png" />
+				
+			</a>
+			<std:link id="up_btn" style="display:none;" action="caisse-web.caisseWeb.upButtonEvent" targetDiv="right-div" classStyle="btn btn-default btn-circle btn-lg btn-menu shiny" tooltip="Monter d'un niveau">
+				<img src="resources/caisse/img/caisse-web/upload.png" />
+			</std:link>
+
+		<std:linkPopup action="caisse-web.caisseWeb.initPaiement" style="padding-left: 6px;padding-top: 3px;width:62px;border-radius: 11px;background: #039be5 !important;" classStyle="btn btn-default btn-circle btn-lg btn-menu shiny" tooltip="Encaisser la commande">
+				<img style="width: 40px;" src="resources/caisse/img/caisse-web/cash_register_sh.png" />
+			</std:linkPopup>
+						
+	 		<!-- AFFICHER CACHER LA COMMANDE -->
+		<a onClick="$('#left-div').toggle(500);" href="javascript:" style="margin-right: 18px;padding-left: 6px;padding-top: 6px;border: 1px solid #2d0f04;margin-top: 1px;" class="btn btn-warning btn-circle btn-lg btn-menu shiny">
+			<img src="resources/caisse/img/caisse-web/shopping_cart2.png" style="width:30px;" />
+			<span id="span_cmd" class="badge badge-danger" style="color: #030303;background-color: #faa31b;font-weight: bold;">
+			</span>
+		</a>
+</div>
+

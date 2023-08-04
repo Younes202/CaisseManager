@@ -1,0 +1,375 @@
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.TYPE_CAISSE_ENUM"%>
+<%@page import="appli.controller.domaine.caisse.bean.CaisseBean"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page import="appli.model.domaine.vente.persistant.JourneePersistant"%>
+<%@page import="framework.controller.Context"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%
+	boolean isDetailJourneeDroit = Context.isOperationAvailable("DETJRN");
+	boolean isAnnulCmdDroit = Context.isOperationAvailable("ANNULCMD");
+	JourneePersistant journeeVente = (JourneePersistant) request.getAttribute("journeeView");
+	String typeCurrCaisse = (String)ControllerUtil.getMenuAttribute("typeCaisse", request);
+	String statut = (journeeVente != null ? journeeVente.getStatut_journee() : null);
+	boolean isJourneeOuverte = "O".equals(statut);
+	boolean isModeDeplace = ControllerUtil.getMenuAttribute("IS_MODE_MOUVE", request) != null;
+%>
+		<link href="resources/framework/js/contextmenu/jquery.contextMenu.min.css" rel="stylesheet" type="text/css" />
+		 <script src="resources/framework/js/contextmenu/jquery.contextMenu.min.js" type="text/javascript"></script>
+	 	<script src="resources/framework/js/contextmenu/jquery.ui.position.min.js" type="text/javascript"></script>
+	
+		<style type="text/css">
+			.context-menu-root .del {
+				color: red;
+			}
+			.context-menu-root .off {
+				color: green;
+			}
+			.context-menu-root .com{
+				color: blue;
+			}
+		</style>
+		
+<script type="text/javascript">
+$(document).ready(function (){
+	$(document).off('click', 'a[id="lnk_annul"]');
+	$(document).on('click', 'a[id="lnk_annul"]', function(){
+		showConfirmDeleteBox('<%=EncryptionUtil.encrypt("caisse.journee.annulerCommande")%>', $(this).attr("params"), $(this), "Cette commande sera annul&eacute;e ainsi que son stock. Cette op&eacute;ration n''est pas annulable.<br>Voulez-vous confirmer ?", null, "Annulation commande");
+    });
+});
+
+function triggerFilter(){
+	$('#tab_mvm').attr('params', 'cs='+$('#curr_caisse').val()+'&cc='+$('#curr_caissier').val()).trigger('click');
+}
+</script>
+<!-- Page Breadcrumb -->
+<div class="page-breadcrumbs breadcrumbs-fixed">
+	<ul class="breadcrumb">
+		<li><i class="fa fa-home"></i> <a href="#">Accueil</a></li>
+		<li>Gestion de la journ&eacute;</li>
+		<li class="active">Mouvements journ&eacute;e</li>
+	</ul>
+</div>
+<!-- /Page Breadcrumb -->
+<!-- Page Header -->
+<div class="page-header position-relative">
+	<div class="header-title" style="padding-top: 4px;">
+		<%
+			if(ControllerUtil.getMenuAttribute("isCaisse", request) == null){
+		%>
+		<%if(ControllerUtil.getMenuAttribute("IS_DASH_JRN", request) == null){ %>
+			<std:link classStyle="btn btn-default" action="caisse.journee.work_find" params="bck=1" icon="fa fa-3x fa-mail-reply-all" tooltip="Retour &agrave; la recherche" />
+		<%} %>	
+			<%
+				if(StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("DOUBLE_CLOTURE")) && StringUtil.isTrue(""+request.getAttribute("isDoubleCloture")) && isJourneeOuverte && !isDetailJourneeDroit){
+			%> 
+				<std:link actionGroup="C" classStyle="btn btn-danger" action="caisse.caisse.init_cloturer_shifts" tooltip="Double cl&ocirc;ture des shifts activ&eacute;e" value="Double cl&ocirc;ture shifts" />
+	      	<%
+	      		}
+	      	%>
+	      	
+	      	<%if(ContextAppli.getUserBean().getIs_RemoteAdmin()){ %>
+	      		<std:link classStyle="btn btn-primary" action="caisse.journee.deplace_cmds" value="Déplacer vers shift" icon="fa fa-3x fa-random" tooltip="Déplacer les mouvements vers un autre shift" />
+	      	<%} %>
+		<%
+			} else{
+		%>
+			<std:link classStyle="btn btn-default" action="caisse.caisse.work_find" params="bck=1" icon="fa fa-3x fa-mail-reply-all" tooltip="Retour &agrave; la recherche" />
+		<%
+			}
+		%>
+	</div>
+	<!--Header Buttons-->
+	<jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+	<!--Header Buttons End-->
+</div>
+<!-- /Page Header -->
+
+<!-- Page Body -->
+<div class="page-body">
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+
+	<div class="row">
+		<div class="col-lg-12 col-sm-12 col-xs-12">
+			<div class="widget">
+				<div class="widget-main ">
+					<div class="tabbable">
+						<% if(ControllerUtil.getMenuAttribute("isCaisse", request) == null){ %>
+							<%request.setAttribute("curr_tab", "mvm"); %>
+							<jsp:include page="journee_tab_header.jsp" />
+						<%} else{ %>
+							<ul class="nav nav-tabs" id="myTab">
+								<li><a data-toggle="tab" href="#descripton" wact="<%=EncryptionUtil.encrypt("caisse.caisse.work_edit")%>"> Fiche </a></li>
+								<li class="active"><a data-toggle="tab" id="tab_mvm" href="#journeeCaisse" wact="<%=EncryptionUtil.encrypt("caisse.caisse.find_mouvement")%>"> Mouvements caisses </a></li>
+								<% 
+		                           for(TYPE_CAISSE_ENUM typeCaisse : TYPE_CAISSE_ENUM.values()){
+		                           		if(typeCaisse.toString().equals(typeCurrCaisse)){%>
+		                           			<li>
+		                                    <a data-toggle="tab" href="#configCaisse" wact="<%=EncryptionUtil.encrypt("caisse.caisseConfiguration.work_edit")%>">
+		                                     	Configuration <%=typeCaisse.getLibelle() %>
+		                                    </a>
+		                                  </li>
+		                           		<%} 
+                           			}%>
+							<%} %>
+						</ul>
+
+						<!-- row -->
+						<div class="tab-content">
+							<std:form name="search-form">
+								<%
+									if(ControllerUtil.getMenuAttribute("isCaisse", request) == null){
+								%>
+									<div class="form-group">
+										<std:label classStyle="control-label col-md-2" value="Caisse" />
+										<div class="col-md-2">
+											<std:select type="long" name="curr_caisse" data="${listCaisse }" key="id" labels="reference" width="300px;" onChange="triggerFilter();" value="${currCaisse }" />
+										</div>
+										
+										<std:label classStyle="control-label col-md-2" value="Caissier" />
+										<div class="col-md-2">
+											<std:select type="long" name="curr_caissier" data="${listUser }" key="id" labels="login" width="300px;" onChange="triggerFilter();" value="${currCaissier }" />
+										</div>
+									</div>
+									<br>	
+								<%
+										} else{
+									%>
+									<div class="row">
+								        <div class="form-group">
+								        	<std:label classStyle="control-label col-md-2" value="Date d&eacute;but" />
+								            <div class="col-md-2">
+								                 <std:date name="dateDebut" value="${dateDebut }"/>
+								            </div>
+								            <div class="col-md-2" style="text-align: center;">
+								            	<std:link action="caisse.caisse.find_mouvement" params="prev=1&is_fltr=1" icon="fa fa-arrow-circle-left" tooltip="Journ&eacute;e pr&eacute;c&eacute;dente" />
+								            	<std:link action="caisse.caisse.find_mouvement" params="next=1&is_fltr=1" icon="fa fa-arrow-circle-right" tooltip="Journ&eacute;e suivante" />
+								            </div>
+								            
+								            <std:label classStyle="control-label col-md-1" value="Date fin" />
+								            <div class="col-md-2">
+								                 <std:date name="dateFin" value="${dateFin }"/>
+								            </div>
+								            <div class="col-md-2">
+								           	 	<std:button action="caisse.caisse.find_mouvement" value="Filtrer" params="is_fltr=1" classStyle="btn btn-primary" />
+								           	 </div>	
+								       </div>
+								       <div class="row">
+								        	<div class="form-group">
+								        		<std:label classStyle="control-label col-md-2" value="Journée de travail" />
+									            <div class="col-md-2">
+									                 <std:select type="long" name="curr_journee" data="${listJournee }" key="id" labels="date_journee" width="300px;" onChange="$('#tab_mvm').attr('params', 'jr='+$('#curr_journee').val()).trigger('click');" value="${curr_journee }" />
+									            </div>
+								        	</div>
+								        </div>    
+								   </div> 
+								<%
+ 									}
+ 								%>
+								<!-- Liste des caisses -->
+								<cplx:table name="list_caisseMouvement" transitionType="simple" width="100%" titleKey="caisseMouvement.list" initAction='<%=ControllerUtil.getMenuAttribute("isCaisse", request) == null ? "caisse.journee.find_mouvement":"caisse.caisse.find_mouvement"%>'
+									checkable='<%=isModeDeplace ? "true" : "false" %>' autoHeight="true">
+									<cplx:header>
+										<cplx:th type="empty" />
+										<%
+										if(ControllerUtil.getMenuAttribute("journeeId", request) == null){
+										%>	
+											<cplx:th type="date" value="Date" field="caisseMouvement.date_vente" width="100" filterOnly="true" />	
+										<%
+										}
+										%>
+									
+										<cplx:th type="string" valueKey="caisseMouvement.ref_commande" field="caisseMouvement.ref_commande" width="150" />
+										<cplx:th type="string[]" value="Statut" field="caisseMouvement.last_statut" width="80" groupValues="${statutArray }" />
+										
+										<cplx:th type="long" value="Qui a commandé ?" sortable="false" filtrable="false"/>
+										<cplx:th type="long[]" value="Caissier" field="caisseMouvement.opc_user.id" groupValues="${listUser }" groupKey="id" groupLabel="login" />
+										<cplx:th type="long[]" value="Employé commande" field="caisseMouvement.opc_employe.id"  groupValues="${listEmploye }" groupKey="id" groupLabel="nom" filterOnly="true"/>
+										<cplx:th type="long[]" value="Client commande" field="caisseMouvement.opc_client.id" groupValues="${listClient }" groupKey="id" groupLabel="nom" filterOnly="true" />
+										<%
+											if(isDetailJourneeDroit){
+										%>
+											<cplx:th type="decimal" value="Mtt. commande" field="caisseMouvement.mtt_commande" width="80" />
+											<cplx:th type="decimal" value="Mtt. commande net" field="caisseMouvement.mtt_commande_net" width="80" />
+											<cplx:th type="decimal" style="color:red;" value="Mtt. annulation" field="caisseMouvement.mtt_annul_ligne" width="80" />
+											<cplx:th type="decimal" value="Mtt. r&eacute;duction" field="caisseMouvement.mtt_reduction" width="80" filtrable="false" />
+											<cplx:th type="decimal" value="Mtt. offert" field="caisseMouvement.mtt_art_offert" width="80" filtrable="false" />
+										<%
+											}
+										%>
+										<cplx:th type="string[]" valueKey="caisseMouvement.type_commande" field="caisseMouvement.type_commande" width="120" groupValues="${typeCmd }" />
+										<cplx:th type="string[]" valueKey="caisseMouvement.mode_paiement" field="caisseMouvement.mode_paiement" width="110" groupValues="${modePaie }"/>
+										<%
+											if(ControllerUtil.getMenuAttribute("isCaisse", request) == null){
+										%>
+											<cplx:th type="empty" width="120"/>
+										<%
+											} else{
+										%>
+											<cplx:th type="empty" width="50"/>
+										<%
+											}
+										%>
+									</cplx:header>
+									<cplx:body>
+									
+										<c:set var="oldjour" value="${null }"></c:set>
+										<c:set var="oldCaisse" value="${null }"></c:set>
+										<c:set var="oldjourCaisse" value="${null }"></c:set>
+										<c:set var="contextRestau" value="<%=new ContextAppli()%>"></c:set>
+										<c:set var="dateUtil" value="<%=new DateUtil()%>"></c:set>
+										
+										<c:forEach items="${list_caisseMouvement }" var="caisseMouvement">
+											
+										<%if(ControllerUtil.getMenuAttribute("journeeId", request) == null){ %>	
+											<c:if test="${oldjour == null  or oldjour != caisseMouvement.opc_caisse_journee.opc_journee.id }">
+												<tr>
+													<td colspan="${isDetailJourneeDroit? '8':'13'}" noresize="true" class="separator-group">
+														<span class="fa fa-fw fa-folder-open-o separator-icon"></span> <fmt:formatDate value="${caisseMouvement.date_vente}"/>
+													</td>
+												</tr>	
+											</c:if>
+											<c:set var="oldjour" value="${caisseMouvement.opc_caisse_journee.opc_journee.id }"></c:set>
+										<%} else{ %>
+											<!-- Caisse -->
+											<c:if test="${oldCaisse == null  or oldCaisse != caisseMouvement.opc_caisse_journee.opc_caisse.id }">
+												<tr>
+													<td colspan="${isDetailJourneeDroit? '8':'13'}" noresize="true" class="separator-group">
+														<span class="fa fa-fw fa-folder-open-o separator-icon"></span> ${caisseMouvement.opc_caisse_journee.opc_caisse.reference.toUpperCase() }
+													</td>
+												</tr>	
+											</c:if>
+											<c:set var="oldCaisse" value="${caisseMouvement.opc_caisse_journee.opc_caisse.id }"></c:set>
+										<%} %>
+											<!-- Caisse journ&eacute;e -->
+										     <c:if test="${oldjourCaisse == null  or oldjourCaisse != caisseMouvement.opc_caisse_journee.id }">
+												<tr>
+													<td colspan="${isDetailJourneeDroit? '8':'13'}" noresize="true" style="font-size: 13px;font-weight: bold;color:blue;background-color: #fff9e0;padding-left:30px;">Shift de <fmt:formatDate value="${caisseMouvement.opc_caisse_journee.date_ouverture}" pattern="HH:mm:ss"/></td>
+												</tr>	
+											</c:if>
+											<c:set var="oldjourCaisse" value="${caisseMouvement.opc_caisse_journee.id }"></c:set>
+										
+											<cplx:tr workId="${caisseMouvement.id }">
+												<cplx:td>
+													<std:linkPopup classStyle="btn btn-sm btn-primary" action="caisse.journee.edit_mouvement" workId="${caisseMouvement.id }">
+														<span class="fa fa-eye"></span>
+													</std:linkPopup>
+												</cplx:td>
+												<cplx:td style="${caisseMouvement.is_annule?'text-decoration: line-through;color: #9acde4;':'' }">
+													<c:if test="${caisseMouvement.opc_user_annul != null}">
+														<img class="tooltip-blue" data-toggle="tooltip" data-placement="buttom" data-original-title="Utilisateur : ${caisseMouvement.opc_user_annul!=null?caisseMouvement.opc_user_annul.login:caisseMouvement.opc_user.login}<br>Date : ${dateUtil.dateTimeToString(caisseMouvement.date_annul)}" src="resources/framework/img/exclamation.png" style="vertical-align: bottom;"/>
+													</c:if>
+													${caisseMouvement.ref_commande}
+												</cplx:td>
+												<cplx:td align="center" style="color:${caisseMouvement.last_statut=='VALIDE'?'green':'orange'};" value="${contextRestau.getLibelleStatut(caisseMouvement.last_statut)}"></cplx:td>
+												
+												<cplx:td>
+													${caisseMouvement.opc_employe.nom} ${caisseMouvement.opc_employe.prenom}
+													${caisseMouvement.opc_employe!=null? ' (Employé)':'' }
+													${caisseMouvement.opc_client.nom} ${caisseMouvement.opc_client.prenom}
+												</cplx:td>
+												<cplx:td value="${caisseMouvement.opc_user.login }"></cplx:td>
+												<%if(isDetailJourneeDroit){%>
+													<cplx:td style="font-weight:bold;" align="right" value="${caisseMouvement.mtt_commande}"></cplx:td>
+													<cplx:td style="font-weight:bold;" align="right" value="${caisseMouvement.mtt_commande_net}"></cplx:td>
+													<cplx:td style="font-weight:bold;color:red;" align="right" value="${caisseMouvement.mtt_annul_ligne}" />
+													<cplx:td align="right" value="${caisseMouvement.mtt_reduction}"></cplx:td>
+													<cplx:td align="right" value="${caisseMouvement.mtt_art_offert}"></cplx:td>
+												<%}%>
+												<cplx:td align="center" value="${caisseMouvement.type_commande}"></cplx:td>
+												<cplx:td align="center" style="color:green;" value="${caisseMouvement.mode_paiement}"></cplx:td>
+												<cplx:td align="right">
+													<%if(isAnnulCmdDroit && ControllerUtil.getMenuAttribute("isCaisse", request) == null){ %>
+														<c:if test="${not caisseMouvement.is_annule && caisseMouvement.opc_caisse_journee.opc_journee.statut_journee=='O' }">
+															<std:link id="lnk_annul" classStyle="btn btn-sm btn-info shiny" style="color:red;" params="mvm=${caisseMouvement.id}" action="" icon="fa fa-power-off" tooltip="Annuler cette commande" />
+														</c:if>
+														<std:linkPopup actionGroup="S" classStyle="btn btn-sm btn-default shiny" style="color:black" action="stock-caisse.mouvementStock.init_pdf_facture" workId="${caisseMouvement.id}" icon="fa fa-file-pdf-o" tooltip="T&eacute;l&eacute;charger fichier pdf" />
+													<%} %>
+													<std:link classStyle="btn btn-sm btn-success shiny" style="color:black;" params="mvm=${caisseMouvement.id}" action="caisse-web.caisseWeb.print" icon="fa fa-print" targetDiv="div_gen_printer" tooltip="Imprimer le ticket" />
+												</cplx:td>	
+											</cplx:tr>
+										</c:forEach>
+										<c:if test="${!list_caisseMouvement.isEmpty()}">
+												<%if(isDetailJourneeDroit){%>
+												<tr class="sub">
+														<%if(ControllerUtil.getMenuAttribute("journeeId", request) == null){%>
+														<td colspan="4"></td>
+														<%} else{ %>
+														<td colspan="5"></td>
+														<%} %>
+														<td align="right">
+															<span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">
+																<fmt:formatDecimal value="${mvmDetTotal.mtt_commande }"/>
+															</span>
+														</td>
+														<td align="right">
+															<span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">
+																<fmt:formatDecimal value="${mvmDetTotal.mtt_commande_net }"/>
+															</span>
+														</td>
+														<td align="right">
+															<span style="font-size: 14px !important;font-weight: bold;height: 28px;color:red;" class="badge badge-blue">
+																<fmt:formatDecimal value="${mvmDetTotal.mtt_annul_ligne }"/>
+															</span>
+														</td>
+														<td align="right">
+															<span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">
+																<fmt:formatDecimal value="${mvmDetTotal.mtt_reduction }"/>
+															</span>
+														</td>
+														<td align="right">
+															<span style="font-size: 14px !important;font-weight: bold;height: 28px;" class="badge badge-blue">
+																<fmt:formatDecimal value="${mvmDetTotal.mtt_art_offert }"/>
+															</span>
+														</td>
+													<td colspan="3"></td>
+												</tr>
+												<%}%>
+											</c:if>	
+									</cplx:body>
+<script type="text/javascript">
+$("[data-toggle=tooltip]")
+    .tooltip({
+        html: true
+    });
+</script> 
+									
+								</cplx:table>
+								
+								<%if(isModeDeplace){%>
+								<div class="row">
+								    <div class="form-group">
+								        <std:label classStyle="control-label col-md-2" value="Shift cible" />
+									    <div class="col-md-2">
+											<std:select name="shift_target" type="long" data="${listShift }" key="id" labels="opc_journee.date_journee;' [';date_ouverture;'=>';date_cloture;']'" />
+										</div>
+									</div>
+								</div>
+								<div class="row" style="text-align: center;">
+									<std:button classStyle="btn btn-success" action="caisse.journee.deplace_cmds" params="isDep=1" value="DEPLACER LES MOUVEMENTS" />
+								</div>	
+								<%} %>
+								
+							</std:form>
+
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<!-- end widget div -->
+

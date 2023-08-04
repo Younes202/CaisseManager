@@ -1,0 +1,189 @@
+package framework.model.beanContext;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.MappedSuperclass;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
+import javax.persistence.Transient;
+
+@MappedSuperclass
+public abstract class BasePersistant implements Serializable {
+	private static final long serialVersionUID = 1L;
+	
+	@Id
+    @Column(nullable = false)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(length = 120)
+	private String code_func;
+    
+    // Ces deux champs sont important uniquement dans le cas de l'instance cloud
+//    @Column(length=120)
+//	private String ets_dest;
+    
+    @Column(insertable=false, updatable=false)
+    private Long abonne_id;
+    @Column(insertable=false, updatable=false)
+    private Long societe_id;
+    @Column(insertable=false, updatable=false)
+    private Long etablissement_id;
+    
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "societe_id", referencedColumnName = "id")
+	private SocietePersistant opc_societe;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "abonne_id", referencedColumnName = "id")
+	private AbonnePersistant opc_abonne;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "etablissement_id", referencedColumnName = "id")
+	private EtablissementPersistant opc_etablissement;
+    
+	@Transient
+	private String sync_key;
+	@Transient
+	private String sync_opr_id;
+	
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date date_creation;
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date date_maj;
+    @Column(length = 50)
+    private String signature;
+	
+    @Transient
+    private Long[] ets_ids;
+    
+//	public String getEts_dest() {
+//		return ets_dest;
+//	}
+//
+//	public void setEts_dest(String ets_dest) {
+//		this.ets_dest = ets_dest;
+//	}
+
+	public static long getSerialversionuid() {
+		return serialVersionUID;
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public Date getDate_creation() {
+		return date_creation;
+	}
+
+	public void setDate_creation(Date date_creation) {
+		this.date_creation = date_creation;
+	}
+
+	public Date getDate_maj() {
+		return date_maj;
+	}
+
+	public void setDate_maj(Date date_maj) {
+		this.date_maj = date_maj;
+	}
+
+	public String getSignature() {
+		return signature;
+	}
+
+	public void setSignature(String signature) {
+		this.signature = signature;
+	}
+
+	public String getSync_key() {
+		return sync_key;
+	}
+
+	public void setSync_key(String sync_key) {
+		this.sync_key = sync_key;
+	}
+
+	public String getCode_func() {
+		return code_func;
+	}
+
+	public void setCode_func(String code_func) {
+		this.code_func = code_func;
+	}
+
+	public String getSync_opr_id() {
+		return sync_opr_id;
+	}
+
+	public void setSync_opr_id(String sync_opr_id) {
+		this.sync_opr_id = sync_opr_id;
+	}
+
+	public Long[] getEts_ids() {
+		return ets_ids;
+	}
+
+	public void setEts_ids(Long[] ets_ids) {
+		this.ets_ids = ets_ids;
+	}
+
+	public EtablissementPersistant getOpc_etablissement() {
+		return opc_etablissement;
+	}
+
+	public void setOpc_etablissement(EtablissementPersistant opc_etablissement) {
+		this.opc_etablissement = opc_etablissement;
+	}
+
+	public SocietePersistant getOpc_societe() {
+		return opc_societe;
+	}
+
+	public void setOpc_societe(SocietePersistant opc_societe) {
+		this.opc_societe = opc_societe;
+	}
+
+	public AbonnePersistant getOpc_abonne() {
+		return opc_abonne;
+	}
+
+	public void setOpc_abonne(AbonnePersistant opc_abonne) {
+		this.opc_abonne = opc_abonne;
+	}
+
+	public Long getAbonne_id() {
+		return abonne_id;
+	}
+
+	public void setAbonne_id(Long abonne_id) {
+		this.abonne_id = abonne_id;
+	}
+
+	public Long getSociete_id() {
+		return societe_id;
+	}
+
+	public void setSociete_id(Long societe_id) {
+		this.societe_id = societe_id;
+	}
+
+	public Long getEtablissement_id() {
+		return etablissement_id;
+	}
+
+	public void setEtablissement_id(Long etablissement_id) {
+		this.etablissement_id = etablissement_id;
+	}
+}

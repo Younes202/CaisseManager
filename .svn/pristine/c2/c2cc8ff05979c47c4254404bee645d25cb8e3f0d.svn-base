@@ -1,0 +1,1 @@
+START /wait cmd /c "ZktManage.exe http://localhost:8089/caisse-manager-origine/printCtrl > abc.txt"

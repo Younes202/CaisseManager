@@ -1,0 +1,308 @@
+package appli.model.domaine.caisse.service.impl;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.Query;
+
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.administration.bean.UserBean;
+import appli.controller.domaine.personnel.bean.ClientBean;
+import appli.controller.domaine.stock.bean.ArticleStockInfoBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.controller.domaine.util_erp.ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM;
+import appli.model.domaine.administration.dao.IUserDao;
+import appli.model.domaine.administration.persistant.UserPersistant;
+import appli.model.domaine.administration.service.IClientService;
+import appli.model.domaine.caisse.service.ICaisseMobileService;
+import appli.model.domaine.caisse.service.ICaisseService;
+import appli.model.domaine.caisse.service.ICaisseWebService;
+import appli.model.domaine.habilitation.persistant.ProfilePersistant;
+import appli.model.domaine.personnel.persistant.ClientPersistant;
+import appli.model.domaine.stock.service.IMouvementService;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import framework.controller.ContextGloabalAppli;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.service.GenericJpaService;
+
+@Named
+public class CaisseMobileService extends GenericJpaService<UserBean, Long> implements ICaisseMobileService {
+
+	@Inject
+	private IUserDao userDao;
+	@Inject
+	private IClientService clientService;
+	@Inject
+	private ICaisseService caisseService;
+	@Inject
+	private ICaisseWebService caisseWebService;
+	@Inject
+	private IMouvementService mouvementService;
+	
+	@Override
+	public void createCompte (UserBean userBean, ClientBean clientBean){
+		
+		EtablissementPersistant etablissement = (EtablissementPersistant) findAll(EtablissementPersistant.class).get(0);
+		clientBean.setNumero(clientService.generateNum());
+		clientBean.setOpc_etablissement(etablissement);
+		clientBean.setStatut("TMP");
+		ClientPersistant clientPersistant = new ClientPersistant();
+		ReflectUtil.copyProperties(clientPersistant, clientBean);
+		
+		ClientPersistant opc_client = getEntityManager().merge(clientPersistant);
+		
+		UserPersistant userPersistant = new UserPersistant();
+		Date curr_date = new Date();
+		userBean.setDate_creation(curr_date);
+		userBean.setDate_maj(curr_date);
+		ReflectUtil.copyProperties(userPersistant, userBean);
+		
+		ProfilePersistant profilePersistant = (ProfilePersistant) getSingleResult(getQuery("from ProfilePersistant where code=:code").setParameter("code",  "CLIENT"));
+		userPersistant.setOpc_etablissement(etablissement);
+		userPersistant.setOpc_profile(profilePersistant);
+		userPersistant.setOpc_client(opc_client);
+		
+		getEntityManager().merge(userPersistant);
+	}
+	
+	@Override
+	public void desactiverCompte(String login, String pw){
+		UserPersistant userPersistant = userDao.getUserByLoginAndPw(login, pw);
+		userPersistant.setIs_desactive(true);
+		
+		getEntityManager().merge(userPersistant);
+	}
+	
+	@Override
+	public void activerCompte(String login, String pw){
+		UserPersistant userPersistant = userDao.getUserByLoginAndPw(login, pw);
+		userPersistant.setIs_desactive(false);
+		
+		getEntityManager().merge(userPersistant);
+	}
+	
+	@Override
+	public BigDecimal[] getSolde(ClientPersistant clientPersistant){
+		Query query = getQuery("select solde, opc_carte_client.mtt_total from ClientPortefeuillePersistant portefeuille where opc_carte_client.opc_client.id=:client_id")
+				.setParameter("client_id", clientPersistant.getId());
+		Object[] soldes = (Object[])getSingleResult(query);
+		BigDecimal[] listSolde = new BigDecimal[2] ;
+		if(soldes!=null){
+			listSolde[0] = (BigDecimal)soldes[0];
+			listSolde[1] = (BigDecimal)soldes[1];
+		}
+		return listSolde;
+	}
+	
+	@Override
+	public int isNoter(ClientPersistant clientPersistant, Date dateAvis) {
+		List<CaisseMouvementPersistant> listMouvement1 = null;
+		List<CaisseMouvementPersistant> listMouvement2 = null;
+		if(dateAvis!=null){
+			listMouvement1 = getQuery("from CaisseMouvementPersistant where opc_client.id=:client_id and date_vente>:dateAvis ")
+					.setParameter("client_id", clientPersistant.getId())
+					.setParameter("dateAvis", dateAvis)
+					.getResultList();
+			
+			if(listMouvement1.size() != 0){
+				return 1;
+			} else return -1;
+			
+		} else{
+			listMouvement2 = getQuery("from CaisseMouvementPersistant where opc_client.id=:client_id")
+					.setParameter("client_id", clientPersistant.getId())
+					.getResultList();
+			
+			if(listMouvement2.size() != 0){
+				return 2;
+			} else return -2;
+		}
+	}
+	
+	@Override
+	public List<CaisseMouvementPersistant> listHistorique(ClientPersistant clientPersistant){
+		return getQuery("from CaisseMouvementPersistant where opc_client.id=:client_id ")
+					.setParameter("client_id", clientPersistant.getId())
+					.getResultList();
+	}
+
+	@Override
+	public List<CaisseMouvementPersistant> getCmdClient(Long clientId) {
+		return getQuery("from CaisseMouvementPersistant mouvement "
+				+ "where mouvement.opc_client.id=:clientId "
+				+ "order by mouvement.id desc")
+				.setParameter("clientId", clientId)
+				.getResultList();
+	}
+
+	@Override
+	public int getTotalCmdValidee(Long id) {
+		return BigDecimalUtil.get(""+getSingleResult(getQuery("select count(0) from CaisseMouvementPersistant "
+				+ "where last_statut=:stat or last_statut=:stat2")
+				.setParameter("stat", STATUT_CAISSE_MOUVEMENT_ENUM.VALIDE.toString())
+				.setParameter("stat", STATUT_CAISSE_MOUVEMENT_ENUM.PREP.toString())
+				)).intValue();
+	}
+
+	@Override
+	public List<ClientPersistant> getListClientNonValide() {
+		List<UserPersistant> listUser = getQuery("from UserPersistant "
+				+ "where is_tovalidate=1 "
+				+ "order by id asc")
+					.getResultList();
+		List<ClientPersistant> listClient = new ArrayList<>();
+		for (UserPersistant userP : listUser) {
+			listClient.add(userP.getOpc_client());
+		}
+		return listClient;
+	}
+
+	@Override
+	public List<CaisseMouvementPersistant> getListCmdNonValide(String tp) {
+		Date dateRef = DateUtil.addSubstractDate(new Date(), TIME_ENUM.MINUTE, 10);
+		
+		if("A".equals(tp)) {// Avenir
+			return getQuery("from CaisseMouvementPersistant "
+					+ "where is_tovalidate=1 and date_souhaite is not null and date_souhaite>:dateRef "
+					+ "order by id asc")
+					.setParameter("dateRef", dateRef)
+					.getResultList();
+		} else {// Immédiate
+			return getQuery("from CaisseMouvementPersistant "
+					+ "where is_tovalidate=1 and (date_souhaite is null or date_souhaite<=:dateRef) "
+					+ "order by id asc")
+					.setParameter("dateRef", dateRef)
+					.getResultList();			
+		}
+	}
+
+	@Override
+	@Transactional
+	public void statutClient(Long clientId, String statut) {
+		ClientPersistant clientP = findById(ClientPersistant.class, clientId);
+		UserPersistant userP = (UserPersistant) getSingleResult(getQuery("from UserPersistant where opc_client.id=:userId")
+				.setParameter("userId", clientId));
+
+		if("A".equals(statut)) {
+			userP.setIs_tovalidate(null);
+			userP.setIs_desactive(null);
+			
+			// Notification
+			if(ContextAppli.getAbonementBean().isOptPlusCmdVitrine()) {
+				String msg = "Votre compte est validé. Vous pouvez désormais vous connecter.";
+				notifierClient("CPT", null, clientId, msg);
+			}
+		} else {//R
+			userP.setIs_tovalidate(null);
+			clientP.setIs_disable(true);
+			userP.setIs_desactive(true);
+			
+			// Notification
+			if(ContextAppli.getAbonementBean().isOptPlusCmdVitrine()) {
+				String msg = "Votre compte est rejeté par l'administrateur.";
+				notifierClient("CPT", null, clientId, msg);
+			}
+		}
+	}
+
+	@Override
+	@Transactional
+	public void statutCommande(Long mvmId, String statut) {
+		CaisseMouvementPersistant mvmP = findById(CaisseMouvementPersistant.class, mvmId);
+		Long clientId = mvmP.getOpc_client().getId();
+        		
+		if("A".equals(statut)) {
+			mvmP.setIs_tovalidate(null);
+			mvmP.setIs_annule(null);
+			mvmP.setLast_statut(ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM.VALIDE.toString());
+			mergeEntity(mvmP);
+			
+			// Notification
+			notifierClient("MVM", mvmId, clientId, "Votre commande est validée.");
+	
+        	caisseService.gestionEcranImprimante(mvmP);
+        	
+        	if(ContextGloabalAppli.getAbonementBean().isOptStock()) {
+        		List<ArticleStockInfoBean> listArtInfos = caisseWebService.destockerArticleMvmRestau(mvmP);
+        		mouvementService.majQteArticleInfo(listArtInfos);
+        	}
+        	boolean isCtrlStockCaisse =  StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("INVENTAIRE_CAISSE"));
+			if(isCtrlStockCaisse) {
+				mouvementService.majQteArticleCaisseInfo(mvmP, false);
+			}
+		} else {//R
+			mvmP.setIs_tovalidate(null);
+			mvmP.setIs_annule(true);
+			mvmP.setLast_statut(ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM.ANNUL.toString());
+			mergeEntity(mvmP);
+			
+			// Notification
+			notifierClient("MVM", mvmId, clientId, "Votre commande est rejetée.");
+		}
+	}
+
+//	@Override
+//	@Transactional
+//	public void changerStatutLivreur(Long mvmId, String newStatut) {
+//		CaisseMouvementPersistant caisseMvmP = findById(CaisseMouvementPersistant.class, mvmId);
+//		caisseMvmP.setStatut_livreur(newStatut);
+//		
+//		getEntityManager().merge(caisseMvmP);
+//		
+//		// Notification
+//		if(ContextAppli.getAbonementBean().isOptPlusCmdVitrine()) {
+//			String msg = "Votre livreur "+caisseMvmP.getOpc_employe().getNom()+" a changé de statut.<br>"
+//					+ "Nouveau statut ** "+newStatut+" **.";
+//			notifierClient("LIV", mvmId, msg);
+//		}
+//	}
+	
+	@Override
+	public void notifierClient(String type, Long mvmId, Long clientId, String msg) {
+		// Bouchon
+		if(true) {
+			return;
+		}
+		
+		String titre = "";
+		ClientPersistant client = clientService.findById(ClientPersistant.class, clientId);
+		CaisseMouvementPersistant commande = null;
+		if(mvmId != null) {
+			commande = clientService.findById(CaisseMouvementPersistant.class, mvmId);
+		}
+
+		if("MVM".equals(type)) {// Commande
+			titre = "Statut de votre commande";
+		} else if("CPT".equals(type)) {// Compte
+			titre = "Statut de votre compte";
+		} else if("LIV".equals(type)) {// Livreur
+			titre = "Statut de votre commande";
+		}
+		
+		String title = titre;
+		Map<String, String> mapData = new HashMap<>();
+		mapData = new HashMap<String, String>() {{
+			put("title", title);
+			put("message", msg);
+			put("type", type);
+			put("client", clientId.toString());
+		}};
+		
+//		NotificationQueuService notifService = ServiceUtil.getBusinessBean(NotificationQueuService.class);
+//		notifService.addNotification(mapData, client, null, commande, null);
+	}
+	
+	
+}

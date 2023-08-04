@@ -1,0 +1,230 @@
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="java.util.Calendar"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="java.awt.Color"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="framework.model.common.util.BooleanUtil"%>
+<%@page import="appli.model.domaine.personnel.persistant.PlanningPersistant"%>
+<%@page import="java.util.List"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<style>
+	.fc table {
+		z-index: 0 !important;
+	}
+</style>
+
+<%
+List<PlanningPersistant> list_planning = (List<PlanningPersistant>) request.getAttribute("list_planning");
+boolean isRestau = ContextAppli.IS_RESTAU_ENV();
+%>
+
+<script src='resources/framework/js/fullcalendar/moment.min.js'></script>
+<script src='resources/framework/js/fullcalendar/jquery-ui.custom.min.js'></script>
+<script src='resources/framework/js/fullcalendar/fullcalendar.min.js'></script>
+<script type="text/javascript">
+(function(){
+    function onload (moment, $) {
+
+        // RIPPED STRAIGHT FROM MOMENT'S SOURCE
+        // (https://github.com/moment/moment/blob/develop/lang/fr.js)
+        //
+        moment.lang('fr', {
+            months : "janvier_février_mars_avril_mai_juin_juillet_ao�t_septembre_octobre_novembre_décembre".split("_"),
+            monthsShort : "janv._févr._mars_avr._mai_juin_juil._ao�t_sept._oct._nov._déc.".split("_"),
+            weekdays : "dimanche_lundi_mardi_mercredi_jeudi_vendredi_samedi".split("_"),
+            weekdaysShort : "dim._lun._mar._mer._jeu._ven._sam.".split("_"),
+            weekdaysMin : "Di_Lu_Ma_Me_Je_Ve_Sa".split("_"),
+            longDateFormat : {
+                LT : "HH:mm",
+                L : "DD/MM/YYYY",
+                LL : "D MMMM YYYY",
+                LLL : "D MMMM YYYY LT",
+                LLLL : "dddd D MMMM YYYY LT"
+            },
+            calendar : {
+                sameDay: "[Aujourd'hui ] LT",
+                nextDay: '[Demain ] LT',
+                nextWeek: 'dddd [] LT',
+                lastDay: '[Hier ] LT',
+                lastWeek: 'dddd [dernier ] LT',
+                sameElse: 'L'
+            },
+            relativeTime : {
+                future : "dans %s",
+                past : "il y a %s",
+                s : "quelques secondes",
+                m : "une minute",
+                mm : "%d minutes",
+                h : "une heure",
+                hh : "%d heures",
+                d : "un jour",
+                dd : "%d jours",
+                M : "un mois",
+                MM : "%d mois",
+                y : "un an",
+                yy : "%d ans"
+            },
+            ordinal : function (number) {
+                return number + (number === 1 ? 'er' : '');
+            },
+            week : {
+                dow : 1, // Monday is the first day of the week.
+                doy : 4  // The week that contains Jan 4th is the first week of the year.
+            }
+        });
+        
+        
+        if ($.fullCalendar) {
+            $.fullCalendar.lang('fr', {
+                // strings we need that are neither in Moment nor datepicker
+                "day": "Jour",
+                "week": "Semaine",
+                "month": "Mois",
+                "list": "Mon planning"
+            }, {
+                // VALUES ARE FROM JQUERY-UI DATEPICKER'S TRANSLATIONS
+                // (https://github.com/jquery/jquery-ui/blob/master/ui/i18n/jquery.ui.datepicker-fr.js)
+                // 
+                // Values that are reduntant because of Moment are not included here.
+                //
+                // When fullCalendar's lang method is called, it will merge this config with Moment's
+                // and make this stuff available for jQuery UI's datepicker:
+                //
+                //     $.datepicker.regional['fr'] = ...
+                //
+                closeText: 'Fermer',
+                prevText: 'Précédent',
+                nextText: 'Suivant',
+                currentText: 'Aujourd\'hui',
+                dayNamesMin: ['D','L','M','M','J','V','S'],
+                weekHeader: 'Sem.',
+                dateFormat: 'dd/mm/yy',
+                firstDay: 1,
+                isRTL: false,
+                showMonthAfterYear: false,
+                yearSuffix: ''
+            });
+        }
+
+    }
+
+    // we need Moment and jQuery before we can begin...
+    //
+    if (typeof define === "function" && define.amd) {
+        define(["moment", "jquery"], onload);
+    }
+    if (typeof window !== "undefined" && window.moment && window.jQuery) {
+        onload(window.moment, window.jQuery);
+    }
+
+})();
+    $(document).ready(function () {	
+        /* initialize the calendar
+        -----------------------------------------------------------------*/
+        $('#calendar').fullCalendar({
+        	height: (window.innerHeight-140),
+        	lang: 'fr',
+            header: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'month,agendaWeek,agendaDay'
+            },
+            editable: false,
+            droppable: true, // this allows things to be dropped onto the calendar
+            drop: function () {
+                // is the "remove after drop" checkbox checked?
+                if ($('#drop-remove').is(':checked')) {
+                    // if so, remove the element from the "Draggable Events" list
+                    $(this).remove();
+                }
+            },
+            dayClick: function(date, jsEvent, view) {
+            	$("#add-button").attr("params", "dt="+date.format()).trigger("click");
+            },
+            eventClick: function(event){
+            	$("#link-popup").attr("params", "id="+event._id).trigger('click');
+            },
+            events: [
+            	<%
+            	for(PlanningPersistant data : list_planning){
+            		int diff_days = DateUtil.getDiffDays(data.getDate_debut(), data.getDate_fin());
+            		
+            		long timestamp = data.getDate_debut().getTime();
+            		Calendar calDebut = Calendar.getInstance(), calFin = Calendar.getInstance();
+            		calDebut.setTimeInMillis(timestamp);
+            		
+            		int start_day = calDebut.get(Calendar.DAY_OF_MONTH);
+            		int start_month = calDebut.get(Calendar.MONTH);
+            		int start_year = calDebut.get(Calendar.YEAR);
+            		
+            		int start_hour = calDebut.get(Calendar.HOUR_OF_DAY);
+            		int start_minute = calDebut.get(Calendar.MINUTE);
+            		
+            		timestamp = data.getDate_fin().getTime();
+            		calFin.setTimeInMillis(timestamp);
+            		
+            		int end_day = calFin.get(Calendar.DAY_OF_MONTH);
+            		int end_month = calFin.get(Calendar.MONTH);
+            		int end_year = calFin.get(Calendar.YEAR);
+            		
+            		int end_hour = calFin.get(Calendar.HOUR_OF_DAY);
+            		int end_minute = calFin.get(Calendar.MINUTE);
+
+            		String color = data.getOpc_type_planning().getColor();
+            		
+            		if(BooleanUtil.isTrue(data.getIs_all_day())){
+            			%>
+    	            	{
+    	            		id: '<%=data.getId()%>',
+    	    			    title: '<%=data.getTitre()%>',
+    	    			    start: new Date(<%=start_year%>, <%=start_month%>, <%=start_day%>),
+    	    			    borderColor: '<%=color%>'
+    	    			},
+                	<%} else{%>
+                    	{
+	            			id: '<%=data.getId()%>',
+	            			title: '<%=data.getTitre()%><%=data.getAllTypePlanning_str() != null ? "-->"+data.getAllTypePlanning_str() : ""%>',
+		    			    start: new Date(<%=start_year%>, <%=start_month%>, <%=start_day%>, <%=start_hour%>, <%=start_minute%>),
+		    			    end: new Date(<%=end_year%>, <%=end_month%>, <%=end_day%>, <%=end_hour%>, <%=end_minute%>),
+ 		    				allDay: false,
+							borderColor: '<%=color%>'
+		    			},
+            	<%	}
+            	}%>
+		    ]
+        });
+
+        $(".fc-month-button").text("Mois");
+        $(".fc-agendaWeek-button").text("Semaine");
+        $(".fc-agendaDay-button").text("Jour");
+        $(".fc-today-button").text("Aujourd'hui");
+        
+        //
+    	$("#left-div").hide();
+    	$("#right-div").css("width", "99%");
+    });
+</script>
+
+<div class="row" style="margin-left: 0px;margin-right: 0px;">
+   <div class="widget flat">
+       <div class="widget-body">
+	       	<div class="row" style="margin-left: 0px;">
+	       		<std:linkPopup actionGroup="C" id="add-button" classStyle="btn btn-default" action="caisse-web.calendrier.work_init_create" icon="fa-3x fa-plus" value="Réservation" tooltip="Ajouter réservation" />
+	       		
+	       		<%if(isRestau){ %>
+	       			<std:link actionGroup="C" classStyle="btn btn-primary" action="caisse-web.calendrier.vue_lieu" icon="fa-3x fa-map" value="Vue emplacement" tooltip="Vue emplacement" targetDiv="right-div" />
+	       		<%} %>
+	       		<std:linkPopup style="display:none;" id="link-popup" action="caisse-web.calendrier.work_edit" />
+	        </div>
+	         <div id='calendar'></div>
+       </div>
+   </div>
+</div>

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<%@page import="java.nio.charset.StandardCharsets"%>
+<%@page import="java.net.URLEncoder"%>
+<%@page import="java.net.InetAddress"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@page import="framework.model.common.util.EncryptionEtsUtil"%>
+<%@page import="framework.model.util.audit.ReplicationGenerationEventListener"%>
+<%@page import="java.util.Map"%>
+<%@page import="appli.model.domaine.vente.persistant.CaissePersistant"%>
+<%@page import="java.util.List"%>
+<%@page import="appli.model.domaine.caisse.service.ICaisseService"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="java.util.HashMap"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="framework.model.beanContext.EtablissementPersistant"%>
+<%@page import="appli.model.domaine.administration.service.IParametrageService"%>
+<%@taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+
+<head>
+    <title>Caisse Manager</title>
+    
+    <jsp:include page="WEB-INF/fragment/header-resources.jsp"></jsp:include>
+
+    <style>
+    	html{
+    		overflow: hidden;
+    	}
+	    .social-buttons a:HOVER{
+	    	color : green !important;
+	    }
+	    .popover-content{
+	    	width: 220px;
+	    	height: 70px;
+	    }
+	    .button-twitter{
+	    	box-shadow: 0px 4px 7px rgba(7, 43, 17, 1);
+	    }
+	    .button-twitter:hover{
+	    	box-shadow: 1px 2px 1px rgba(7, 43, 17, 1);
+	    }
+	    .auth {
+		    box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.5) !important;
+		}
+
+		#fullscreen-toggler{
+			position: absolute;
+		    right: 0px;
+		    top: 0px;
+		    z-index: 10000;
+		    box-shadow: -1px 2px 10px rgba(7, 14, 8, 6.5) ;
+		}
+		.td-span-title{
+		    text-align: center;
+    	}
+    </style>
+    
+    <%
+IParametrageService paramsService = ServiceUtil.getBusinessBean(IParametrageService.class);
+EtablissementPersistant restauP = paramsService.getEtsOneOrCodeAuth();
+
+Map<String, String> mapData = new HashMap<>();
+if(!ReplicationGenerationEventListener._IS_CLOUD_SYNCHRO_INSTANCE){
+	restauP = (EtablissementPersistant) paramsService.findById(EtablissementPersistant.class, restauP.getId());	
+	EncryptionEtsUtil encryptionUtil = new EncryptionEtsUtil(EncryptionEtsUtil.getDecrypKey()); 
+	String abonnement = encryptionUtil.decrypt(restauP.getAbonnement());
+		
+	if(StringUtil.isNotEmpty(abonnement)){
+		String[] abonnArray = StringUtil.getArrayFromStringDelim(abonnement, "$$");
+		for (String data : abonnArray) {
+			String[] dataArray = StringUtil.getArrayFromStringDelim(data, ":");
+			if(dataArray!=null && dataArray.length>0){
+				mapData.put(dataArray[0], dataArray.length>1?dataArray[1]:"");
+			}
+		}
+	}
+}
+
+ICaisseService caisseService = (ICaisseService)ServiceUtil.getBusinessBean(ICaisseService.class);
+List<CaissePersistant> listCaisse = caisseService.getListCaisse(true);
+
+String sattelite = mapData.get("sat")==null?"XX":mapData.get("sat");
+boolean isCuisine = (mapData.size()==0 || sattelite.indexOf("SAT_CUISINE;") != -1 );
+boolean isAffichCaisse = (mapData.size()==0 || sattelite.indexOf("SAT_AFFICHEUR_CAISSE;") != -1); 
+boolean isAffichClient = (mapData.size()==0 || sattelite.indexOf("SAT_AFFICHEUR_CLIENT;") != -1);
+boolean isCaisseAutonome = (mapData.size()==0 || sattelite.indexOf("SAT_CAISSE_AUTONOME;") != -1);
+%>
+
+    <%
+    String disabledColor = "color:#d0d0d3;border: 2px solid #d0d0d3";
+    String selectedColor = "black";
+    
+    String[] style = null;
+    
+    if("CLASSIQUE".equals(restauP.getThemeDet("theme_log"))){
+	    style = new String[]{
+		    "color: orange;border: 2px solid #b5a529;",
+		    "color: fushia;border: 2px solid #b5a529;",
+		    (!isCaisseAutonome ? disabledColor : "color:#9c27b0;border: 2px solid #b5a529;"),
+		    
+		    "color: red; border: 2px solid rgb(251, 110, 82);",
+		    
+		    (!isCuisine ? disabledColor : "color:#5db2ff;border:2px solid #b5a529;"),
+		    		(!isCuisine ? disabledColor : "color:#5db2ff;border:2px solid #b5a529;"),
+		    		(!isCuisine ? disabledColor : "color:#5db2ff;border:2px solid #b5a529;"),
+		    		(!isCuisine ? disabledColor : "color:#5db2ff;border:2px solid #b5a529;"),
+		    (!isAffichClient ? disabledColor : "color:rgb(124, 164, 81);border: 2px solid #53a93f;"),
+		    (!isAffichCaisse ? disabledColor : "color:rgb(124, 164, 81);;border: 2px solid #53a93f;")
+	    };
+    } else{
+    	selectedColor = "yellow";
+    	style = new String[]{
+    	    "color: #000000;border: 2px solid #29c1f6;",
+    	    "color: #000000;border: 2px solid #29c1f6;",
+    	    (!isCaisseAutonome ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    
+    	    "color: #000000;border: 2px solid #29c1f6;",
+    	    
+    	    (!isCuisine ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    	(!isCuisine ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    	(!isCuisine ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    	(!isCuisine ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    (!isAffichClient ? disabledColor : "color:#000000;border: 2px solid #29c1f6;"),
+    	    (!isAffichCaisse ? disabledColor : "color:#000000;border: 2px solid #29c1f6;")
+    	    };
+    }
+    %>
+      
+ <script type="text/javascript">
+    
+    function restaureTerminal(){
+    	var caisseRef = readLocalStorage("caisse_ref");
+    	var caisseType = readLocalStorage("caisse_type");
+    	var caisseEnv = readLocalStorage("caisse_env");
+   	  	
+		if(caisseEnv == ''){
+			return;
+		}
+		
+		if(caisseEnv != 'back'){
+        	$('#id_terminal_div').show(500);
+    	}else{
+    		$('#id_terminal_div').hide(500);
+    	}
+		populateTerminal(caisseType);
+		
+		if(caisseRef != ''){
+			$('#caisse_ref').val(caisseRef);
+		}
+		
+		$('#env').val(caisseEnv);
+		$("a[id='"+caisseEnv+"']").css("background-color", "<%=selectedColor%>");
+		var lib = $("#"+caisseEnv).attr("title");
+		if(caisseEnv=='cuis'){
+			lib='Cuisine';
+			$("#cuis_lnk").css("background-color", "<%=selectedColor%>");
+		} else if(caisseEnv=='pil'){ 
+			lib='Pilotage';
+			$("#cuis_lnk").css("background-color", "<%=selectedColor%>");
+		} else if(caisseEnv=='pres'){ 
+			lib='Pr&eacute;sentoire';
+			$("#cuis_lnk").css("background-color", "<%=selectedColor%>");
+		}
+		
+		setLabelEnv();
+    }
+    
+    function getRatioLog(){
+    	var ratio = 1;
+    	var zoom = readLocalStorage("zoom");
+		if(zoom != ''){
+			ratio = zoom;
+		}
+ 	    return ratio;
+    }
+    
+    function populateTerminal(valType){
+		$("#caisse_ref").empty();
+		// Restutuer la liste
+		if(valType == ''){
+			return;
+		}
+		$("#caisseAll > option").each(function() {
+			if($(this).attr("hiddenkey")){
+				 var caisseType = $(this).attr("hiddenkey").split('|')[0];
+				 if(valType == caisseType){
+					 var option = new Option($(this).text(), $(this).val());
+					 $("#caisse_ref").append(option);
+				 }
+			}
+		});
+		$("#caisse_ref").trigger('change');
+	}
+	
+    function manageFilter(){
+    	var caisseEnv = readLocalStorage("caisse_env");
+    	var caisseFilter = readLocalStorage("caisse_filter");
+    	
+    	if(caisseFilter == 1 && (!caisseEnv ||caisseEnv == '' || caisseEnv==null)){
+    		alertify.error("Veuillez sélectionner un environnement avant d'activer le filtre");
+    		return;
+    	}
+    	
+    	if(caisseFilter == 1 && caisseEnv != null && caisseEnv != ''){
+    		$(".loginbox-social, #id_terminal_div").hide();
+    		$("#filter_save").css("background", "#ffb300");
+    	} else{
+    		if(caisseEnv != 'back'){
+    			$("#id_terminal_div").show();
+    		} else{
+    			$("#id_terminal_div").hide();
+    		}
+    		$(".loginbox-social").show();
+    		$("#filter_save").css("background", "");
+    		$("#filter_save").css("background-image", "linear-gradient(to bottom, #fff 0, #ededed 100%);");
+    	}
+	}
+    
+    function setLabelEnv(){
+    	var caisseRef = readLocalStorage("caisse_ref");
+    	var caisseType = readLocalStorage("caisse_type");
+    	var str = 'Environnement';
+    	
+    	if(!isStrEmpty(caisseType)){
+    		str = '<span style="color:black;font-weight:bold;">'+caisseType+'</span> ';
+    	} else{
+    		str = '';
+    	}
+    	if(!isStrEmpty(caisseRef)){
+    		str = str + '[<span style="color:red;font-weight:bold;">'+caisseRef+'</span>]'
+    	} else{
+    		str = 'ENVIRONNEMENTS';
+    	}
+    	
+    	$('#div_env').html(str);
+    }
+    function isStrEmpty(val){
+    	if(val && val != '' && val != null && val != 'null' && val!='undefined'){
+    		return false;
+    	}
+    	return true;
+    }
+    
+$(document).ready(function() {
+	
+	<%
+	String[] urlArrayLocal = {"mob-caissier","mob-util","bo"};
+	String[] urlArrayDistant = {"mob-client","mob-livreur","mob-synthese"};
+	String remoteHost = "";
+	String localHost = "";
+	//
+	if(ReplicationGenerationEventListener._IS_CLOUD_SYNCHRO_INSTANCE){
+		remoteHost = StrimUtil.getGlobalConfigPropertie("instance.url");
+		localHost = remoteHost;
+	} else{
+		String port = StrimUtil.getGlobalConfigPropertie("caisse.instance.port");
+		port = (StringUtil.isEmpty(port) ? "8089" : port);
+		String instance = StrimUtil.getGlobalConfigPropertie("caisse.instance.name");
+		instance = (StringUtil.isEmpty(instance) ? "caisse-manager-origine" : instance);
+		localHost = "http://"+InetAddress.getLocalHost().getHostAddress()+":"+port+"/"+instance;
+		remoteHost = StrimUtil.getGlobalConfigPropertie("acces.distant.url");
+		//
+		if(StringUtil.isEmpty(remoteHost)){
+			remoteHost = localHost;
+		}
+	}
+
+	for(String val : urlArrayDistant){%>
+		new QRCode("qrcode<%=val%>", {
+		    text: "APP-<%=EncryptionUtil.encrypt(remoteHost+"|"+paramsService.getEtsOneOrCodeAuth().getToken()+"|"+val)%>",
+		    width: 128,
+		    height: 128,
+		    colorDark : "#000000",
+		    colorLight : "#ffffff",
+		    correctLevel : QRCode.CorrectLevel.H
+		});				
+	<%}
+	for(String val : urlArrayLocal){ %>
+		// TYPE|URL|JTN|ENV
+		new QRCode("qrcode<%=val%>", {
+		    text: "APP-<%=EncryptionUtil.encrypt(localHost+"|"+paramsService.getEtsOneOrCodeAuth().getToken()+"|"+val)%>",
+		    width: 128,
+		    height: 128,
+		    colorDark : "#000000",
+		    colorLight : "#ffffff",
+		    correctLevel : QRCode.CorrectLevel.H
+		});
+	<%} %>
+	
+	addTokenParams();
+	
+	init_keyboard_events();
+	//
+	manageFilter();
+	//
+	restaureTerminal();
+	
+	var ratio = getRatioLog();
+	if(ratio && ratio != ''){
+		$("html").css("zoom", ratio).css("-moz-transform", "scale("+ratio+")").css("-moz-transform-origin", "0.0");
+	}
+	
+	$("#filter_save").click(function () {
+		var caisseEnv = readLocalStorage("caisse_filter");
+		writeLocalStorage("caisse_filter", caisseEnv==1 ? 0 : 1);
+		//
+		manageFilter();
+	});
+	
+	$("#caisse_ref").change(function(){
+		writeLocalStorage("caisse_ref", $("#caisse_ref").val());
+		setLabelEnv();
+	});
+	
+	//
+	$("#lnk_unlock").click(function () {
+        bootbox.dialog({
+        	  message: "Code de validation : <span class='input-icon icon-right'><input type='text' autocomplete='off' name='unlock_code' id='unlock_code' class='form-control'><i class='fa fa-unlock darkorange'></i></span>",
+        	  title: "Veuillez saisir le code de d&eacute;blocage :",
+        	  buttons: {
+        	    main: {
+        	      label: "Valider",
+        	      className: "btn-primary",
+        	      callback: function() {
+        	        if($.trim($('#unlock_code').val()) == ''){
+        	        	alertify.error("Veuillez saisir le code fourni par le support.");
+        	        } else{
+        	        	submitAjaxForm('<%=EncryptionUtil.encrypt("commun.login.checkCodeAbonnement")%>', 'unlockopr=1&tkn='+$('#unlock_code').val());
+        	        }
+        	      }
+        	    }
+        	  }
+        	});
+    });
+	
+	$("#login, #password").keypress(function(e){
+		if(e.which == 13) {
+			$("a[wact]").trigger("click");
+	    }
+	});
+	
+	$("#login_lnk").click(function(){
+    	writeLocalStorage("caisse_ref", $("#caisse_ref").val());
+    	writeLocalStorage("caisse_env", $("#env").val());
+	});
+	
+	$(document).off('click', '.button-twitter').on('click', '.button-twitter', function(){
+		writeLocalStorage("caisse_ref", '');
+		writeLocalStorage("caisse_type", '');
+		writeLocalStorage("caisse_env", '');
+		$("#env").val('');
+		$('#div_env').html('');
+		
+		if($(this).attr("tpc")){
+			populateTerminal($(this).attr("tpc"));	
+		}
+		
+		var idValue = $(this).attr("id");
+    	if(idValue != 'back'){
+        	$('#id_terminal_div').show(500);
+    	}else{
+    		$('#id_terminal_div').hide(500);
+    	}
+    	
+		if($(this).attr("no_av")){
+			return;
+		}
+		if($(this).attr('id') == 'cuis_lnk'){
+			$("#cuis_lnk").css("background-color", "white");
+			$("#"+$("#env").val()).css("background-color", "<%=selectedColor%>");
+			return;
+		}
+		if($('.popover-content').length > 0){
+			$("#cuis_lnk").trigger("click");
+		}
+		$("#env").val($(this).attr(("id")));
+		writeLocalStorage("caisse_env", $("#env").val());
+		writeLocalStorage("caisse_type", $(this).attr("tpc"));
+		
+		$(".button-twitter").css("background-color", "white");
+		$(this).css("background-color", "<%=selectedColor%>");
+		//
+		if($("#env").val()=='pres' || $("#env").val()=='cuis' || $("#env").val()=='pil'){
+			$("#cuis_lnk").css("background-color", "<%=selectedColor%>");
+		}
+		
+		setLabelEnv();
+	});
+	
+	var barcode="";
+    $(document).keydown(function(e) {
+        var code = (e.keyCode ? e.keyCode : e.which);
+        var sourceEvent = $(e.target).prop('nodeName');
+        var isInput = (sourceEvent == 'INPUT') ? true : false;
+        
+        if(!isInput && code==13 && $.trim(barcode) != ''){
+        	<%-- Correction bug caracteres caches --%>
+        	if(barcode.length >= 10){
+	        	barcode = barcode.substring(barcode.length-10);
+	        	if(barcode.length==10){
+	        		e.preventDefault();
+	        		submitAjaxForm('<%=EncryptionUtil.encrypt("commun.login.connect")%>', 'tkn='+barcode+"&env="+$("#env").val()+'&caisse_ref='+$("#caisse_ref").val());
+	        	}
+        	}
+        	barcode="";
+        } else{
+  			 barcode = barcode + String.fromCharCode(code);
+        }
+    });
+    $("#env").focus();
+});
+
+//Appel depuis WebView
+function setAndroidLoginPw(login, pw) {
+	
+}
+</script>
+</head>
+<!--Head Ends-->
+
+<!--Body-->
+<body>
+<!-- KeyBoard -->
+<jsp:include page="/commun/keyboard-popup.jsp" />
+
+<%
+	  boolean isImg = false;
+	  if(restauP.getId() != null){
+		  String path = "restau/fond/"+restauP.getId();
+		  Map<String, byte[]> imagep = FileUtil.getListFilesByte(path);
+	      if(imagep.size() > 0){ %>
+			<div style="background-image: url(data:image/jpeg;base64,<%=FileUtil.getByte64(imagep.entrySet().iterator().next().getValue())%>);position: absolute;width: 100%;height: 100%;top: 0px;background-size: 100%;"></div>                        
+	    <%
+	    	isImg = true;
+	     } 
+	  }
+	  if(!isImg){ %>
+		<div style="background-image: url(resources/restau/img/restaurant-691377_1920.jpg);position: absolute;width: 100%;height: 100%;top: 0px;background-size: 100%;"></div>
+	<%} %>
+
+ <div class="login-container animated fadeInDown" style="margin-top: 5%;">
+    <form name="login-form" id="login-form">
+    	<input type="hidden" name="env" id="env">
+        <div class="loginbox bg-white" style="width: 96% !important;margin-left:2%;border-radius: 20px;box-shadow: 15px 6px 42px 0px #6e5240;opacity: 88%;">
+	       	<a class="fullscreen btn btn-default btn-circle btn-sm" id="fullscreen-toggler" href="javascript:" >
+	         	<i class="glyphicon glyphicon-fullscreen"></i>
+	     	</a>
+	     	<div class="header">
+                <div class="row">
+                  <div class="col-md-12 col-lg-12" style="text-align: center;">
+                     <p><img src="resources/<%=StrimUtil.getGlobalConfigPropertie("context.soft") %>/img/logo_caisse_red.png?v=1.7" alt="Logo" style="width: 180px;margin-top: 15px;"></p>
+                  </div>
+                </div>
+            </div>
+            <div class="loginbox-or" style="margin-top: 10px;">
+                <div class="or-line" style="left: 7px;right: 7px"></div>
+                <div class="or" style="width: 50%;left: 26%;" id="div_env">ENVIRONNEMENTS</div>
+            </div>
+            
+            <div class="loginbox-social">
+                <div class="social-buttons" style="padding: 0px 0px;">
+	                <table style="width: 93%;float: left;">
+	                	<tr>
+	                		<td style="width: 30%;">
+			                    <a href="javascript:" id="cais" tp="CAISSE" tpc="CAISSE" class="button-twitter" title="Caisse standard" style="<%=style[0]%>;margin-left: 30%;">
+			                        <i class="social-icon fa fa-fax"></i>
+			                    </a>
+		                	</td>    
+	                    	<td style="width: 30%;">
+			                     <a href="javascript:" id="cais_mob" tp="CAISSE" tpc="CAISSE" class="button-twitter" title="Caisse mobile" style="<%=style[1]%>;margin-left: 30%;">
+			                        <i class="social-icon fa fa-tablet"></i>
+			                    </a>
+	                    	</td>
+	                    	<td style="width: 30%;">
+			                    <a href="javascript:" id="cais_cli" tp="CAISSE_CLIENT" tpc="CAISSE_CLIENT" class="button-twitter" title="Caisse client" <%=isCaisseAutonome?"":" no_av=\"1\" "%> style="<%=style[2]%>;margin-left: 30%;">
+			                        <i class="social-icon fa fa-male"></i>
+			                    </a>
+			                </td>    
+	                    </tr>
+	                    <tr style="font-size: 9px;">
+		             		<td class="td-span-title" style="width: 30%;">CAISSE TACTILE</td> 
+		             		<td class="td-span-title" style="width: 30%;">CAISSE MOBILE</td>
+		             		<td class="td-span-title" style="width: 30%;">CAISSE CLIENT</td>
+		             	</tr>	
+	             	</table>
+                     <table style="width: 100%;float: left;">
+                     	<tr>
+                     		<td style="width: 20%;">
+			                     <a href="javascript:" id="back" class="button-twitter" title="Backoffice" style="margin-left: 20%;<%=style[3]%>">
+			                        <i class="fa fa-area-chart"></i>
+			                    </a>
+		                    </td>
+		                    <td style="width: 20%;">
+			                    <a href="javascript:" id="cuis_lnk" class="button-twitter" data-container="body" data-toggle="popover" <%=isCuisine?"":" no_av=\"1\" "%> style="margin-left: 20%;<%=style[4]%>;" data-placement="top" data-title="" data-content=' 
+				                    
+				                    <a href="javascript:" id="pres" tp="PRESENTOIRE" tpc="PRESENTOIRE" class="button-twitter btn btn-default btn-circle btn-sm" title="Pr&eacute;sentoire" <%=isCuisine?"":" no_av=\"1\" "%> style="margin-left: 5%;<%=style[5]%>;">
+				                        <i class="social-icon fa fa-laptop" style="font-size: 28px;margin-left: -5px;"></i>
+				                    </a>
+				                    <a href="javascript:" id="cuis" tp="CUISINE" tpc="CUISINE" class="button-twitter btn btn-default btn-circle btn-sm" title="Cuisine" <%=isCuisine?"":" no_av=\"1\" "%> style="margin-left: 5%;float: left;<%=style[6]%>;">
+				                        <i class="social-icon fa fa-cutlery" style="font-size: 28px;margin-left: -5px;"></i>
+				                    </a>
+				                    <a href="javascript:" id="pil" tp="PILOTAGE" tpc="PILOTAGE" class="button-twitter btn btn-default btn-circle btn-sm" title="Pilotage cuisine" <%=isCuisine?"":" no_av=\"1\" "%> style="margin-left: 5%;float: left;<%=style[7]%>;">
+				                        <i class="social-icon fa fa-sitemap" style="font-size: 28px;margin-left: -5px;"></i>
+				                    </a>
+				                    '
+				               		>
+				               		<i class="social-icon fa fa-table"></i>
+				               </a>
+	               			</td>
+	               			<td style="width: 20%;">
+			                     <a href="javascript:" id="affi_salle" tp="AFFICLIENT" tpc="AFFICLIENT" class="button-twitter" title="Afficheur salle" <%=isAffichClient?"":" no_av=\"1\" "%> style="margin-left: 20%;<%=style[8]%>;">
+			                        <i class="social-icon fa fa-user-secret"></i>
+			                    </a>
+			                </td>
+		                    <td style="width: 20%;">
+			                    <a href="javascript:" id="affi_caisse" tp="AFFICHEUR" tpc="AFFICHEUR" class="button-twitter" title="Afficheur caisse" <%=isAffichCaisse?"":" no_av=\"1\" "%> style="margin-left: 20%;<%=style[9]%>;">
+			                        <i class="social-icon fa fa-user-secret"></i>  
+			                    </a>
+		                    </td>
+	                    </tr> 
+	                    <tr style="font-size: 9px;">	
+	                    	<td class="td-span-title" style="width: 20%;">
+	                    		ESPACE<br>BACKOFFICE
+	                    	</td>
+	                    	<td class="td-span-title" style="width: 20%;">	
+			             		SUIVI<br>COMMANDES
+			             	</td>
+			             	<td class="td-span-title" style="width: 20%;">	
+			             		AFFICHEUR<br>SALLE
+	                    	</td>
+	                    	<td class="td-span-title" style="width: 20%;">	
+			             		AFFICHEUR<br>CLIENT
+	                    	</td>
+	                    </tr>
+                    </table> 
+                </div>
+            </div>
+            
+            <div id="id_terminal_div" class="loginbox-textbox" style="display: none;margin-bottom: -35px;line-height: 63px;">
+            
+            	<div  style="display:none;">
+					<std:select name="caisseAll" hiddenkey="type_ecran" type="string" key="adresse_mac" labels="reference" data="<%=listCaisse%>" />
+				</div>
+            	<span class="input-icon icon-right">
+            		<std:select style="background-color: #ccab04;font-size: 18px;padding-top: 3px;border-radius: 22px !important;width: 56%;margin-left: 20%;text-align: center;" placeholder="Terminal" key="adresse_mac" value="reference" classStyle="form-control" name="caisse_ref" type="string" />
+	            </span>    
+            </div>
+			<hr style="width: 100%;">            
+            <div class="loginbox-textbox" style="margin-top: -16px;">
+            	<span class="input-icon icon-right">
+	                <std:text name="login" classStyle="form-control auth" type="string" required="true" validator="email" />
+	                <i class="fa fa-user darkorange"></i>
+	            </span>    
+            </div>
+            <div class="loginbox-textbox">
+            	<span class="input-icon icon-right">
+	                <input type="password" class="form-control auth" name="password" id="password">
+	                 <i class="glyphicon glyphicon-lock maroon"></i>
+                </span>  
+            </div>
+					
+            <div class="widget-buttons buttons-bordered" style="margin-left: 25px;">
+            	<a id="lnk_unlock" title="D&eacute;bloquer l'application par code" style="margin-left: 10px;" class="btn btn-default btn-xs shiny icon-only success" href="javascript:void(0);">
+            		<i class="fa fa-unlock" style="vertical-align: super;"></i>
+            	</a>
+            	|
+            	 <i class="fa fa-chain" style="font-size: 17px;padding-left: 5px;vertical-align: sub;"></i>
+				<label>
+	                 <input class="checkbox-slider toggle colored-blue" type="checkbox" name="session_save" id="session_save" style="display: none;">
+	                 <span class="text"></span>
+				</label>
+         		|
+         		 <i class="fa fa-keyboard-o" style="font-size: 20px;padding-left: 5px;"></i>         
+         		<label>
+	                 <input class="checkbox-slider toggle colored-blue" type="checkbox" id="keyboard-activator" style="display: none;">
+	                 <span class="text"></span>
+	             </label> 
+	             |
+	             <a id="filter_save" title="Filtrer les icons" style="margin-left: 10px;" class="btn btn-default btn-xs shiny icon-only success" href="javascript:void(0);">
+	             	<i class="fa fa-fw fa-filter" style="vertical-align: super;"></i>
+	             </a>
+	             
+	             <div style="width: 100%;float: left;margin-top: -14px;font-size: 9px;">
+		             <span style="margin-left: 10px;">Débloquer</span>
+		             <span style="margin-left: 25px;">Rester connecté</span>
+		             <span style="margin-left: 32px;">Clavier</span>
+		             <span style="margin-left: 42px;">Filtrer</span>
+	             </div>
+         	</div>
+            <br>
+            <div class="loginbox-submit" style="margin-top: 10px;">
+                <a href="javascript:void(0)" id="login_lnk" wact="<%=EncryptionUtil.encrypt("commun.login.connect")%>" class="btn btn-primary btn-block  auth">Connexion</a>
+            </div>
+            
+            <a href="javascript:" style="margin-left: 30%;" data-toggle="modal" data-backdrop="static" data-keyboard="false" data-target="#appli-modal-div">APPLICATIONS MOBILES</a>
+            
+            <div style="font-size: 10px;position: absolute;right: 12px;bottom: 0px;">
+            	<span>[V <%=StringUtil.getValueOrEmpty(restauP.getVersion_soft()) %>]</span>
+                <img src="resources/framework/img/badge_scanner.png" style="width: 20px" title="Lecteur badge utilisable sur cet écran">
+            </div>
+            
+        </div>
+      </form>  
+    </div>
+
+
+
+ <div id="appli-modal-div" class="modal modal-message modal-warning fade" style="display: none;z-index: 99999" aria-hidden="true">
+     <div class="modal-dialog">
+         <div class="modal-content">
+             <div class="modal-header">
+                 <img alt="" src="resources/framework/img/google_android.png" style="width: 30px"> 
+                 <div class="modal-title">APPLICATIONS MOBILES</div>
+             </div>
+
+             <div class="modal-body" id="global-msg-body">
+	        <div style="background-color: white;
+			    margin-top: 5px;
+			    height: 57px;
+			    margin-left: 9px;
+			    margin-right: 11px;
+			    border-radius: 10px;
+			    width:100%;
+			    font-size: 17px;">
+	        	
+	        	<table style="width: 100%;float: left;">
+	        		<tr>
+	        			<td style="text-align: left;">
+		        			<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-laptop" style="color: olive;"></i> 
+								<span>CAISSIER</span>
+							</a>
+	        			</td>
+	        			<td style="text-align: left;">
+	        				<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-barcode" style="color: olive;"></i> 
+								<span>UTILITAIRES</span>
+							</a>
+	        			</td>
+	        			<td style="text-align: left;">
+	        				<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-dashboard" style="color: olive;"></i> 
+								<span>BACK-OFFICE</span>
+							</a>
+	        			</td>
+	        		</tr>
+	        		<tr>
+	        			<%for(String val : urlArrayLocal){ %>
+	        			<td><div id="qrcode<%=val %>" style="width:160px;height:160px;margin-top:15px;float: left;"></div></td>
+	        			<%} %>
+	        		</tr>
+	        		
+	        		<tr style="height: 20px;"><td colspan="3">&nbsp;</td></tr>
+	        		
+	        		<tr>
+	        			<td style="text-align: left;">
+		        			<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-bar-chart-o" style="color: olive;"></i> 
+								<span>SYNTHESE</span>
+							</a>
+	        			</td>
+	        			<td style="text-align: left;">
+	        				<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-motorcycle" style="color: olive;"></i> 
+								<span>LIVREUR</span>
+							</a>
+	        			</td>
+	        			<td style="text-align: left;">
+	        				<a title="Télécharger l'application" style="color: black;" href="javascript:"> 
+								<i class="fa fa-user" style="color: olive;"></i> 
+								<span>CLIENT</span>
+							</a>
+	        			</td>
+	        		</tr>
+	        		<tr>
+	        			<%for(String val : urlArrayDistant){ %>
+	        			<td><div id="qrcode<%=val %>" style="width:160px;height:160px;margin-top:5px;float: left;"></div></td>
+	        			<%} %>
+	        		</tr>
+	        	</table>
+        	</div>
+        </div>
+             <div class="modal-footer">
+             	 <a title="Télécharger l'application" style="color: black;
+					    background-color: #bdbdbd;
+					    padding: 9px 3px 14px 5px;
+					    margin-right: 7px;" href="front?w_f_act=<%=EncryptionUtil.encrypt("caisse.caisse.telechargerApk")%>&skipI=true&skipP=true&apkD=1">
+             	 	<i class="fa fa-cloud-download"></i> 
+					<span style="color: #0721ff;
+							    font-size: 18px;
+							    text-decoration: underline;">TÉLÉCHARGER L'APPLICATION</span>
+             	 </a>
+                 <button type="button" class="btn btn-primary" style="height: 41px;width: 150px;font-size: 19px;" data-dismiss="modal">Fermer</button>
+             </div>
+         </div> <!-- / .modal-content -->
+     </div> <!-- / .modal-dialog -->
+ </div>
+ 
+<div id="spinner" class="spinner" style="display: none;"> 
+	<% if(!request.getHeader("User-Agent").contains("Mobi")) {%>
+	<img id="img-spinner" src="resources/restau/img/loading2.svg" alt="Loading" />
+	<%} else{ %>
+	<img id="img-spinner" src="resources/framework/img/ajax-loader2.svg" alt="Loading" />
+	<%} %>
+</div>
+
+    <!--Basic Scripts-->
+    <script src="resources/framework/js/jquery-2.1.1.min.js"></script>
+	<script src="resources/framework/js/jquery.cookie.js"></script>
+    <script src="resources/framework/js/util.js?v=1.2<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>"></script>
+	<script src="resources/framework/js/jquery.validate.min.js"></script>
+    
+    <script src="resources/framework/js/bootstrap.min.js"></script>
+    <script src="resources/framework/js/slimscroll/jquery.slimscroll.min.js"></script>
+
+    <!--Beyond Scripts-->
+    <script src="resources/framework/js/beyond.js"></script>
+	<script type="text/javascript" src="resources/framework/js/alertify.min.js"></script>
+	<script src="resources/framework/js/bootbox/bootbox.js"></script>
+	<script src="resources/framework/js/select2/select2.full.min.js"></script>
+	<script src="resources/framework/js/qrcode.min.js"></script>
+</body>
+
+    <script src="resources/framework/js/keyboard/my_keyboard.js?v=<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>"></script>
+    <jsp:include page="/commun/keyboard-popup.jsp" />
+    <jsp:include page="/commun/keyboard-popup-num.jsp" />
+    
+<!--Body Ends-->
+<script type="text/javascript">
+$("[data-toggle=tooltip]")
+    .tooltip({
+        html: true
+    });
+</script> 

@@ -1,0 +1,388 @@
+package appli.controller.domaine.caisse.action;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.inject.Inject;
+
+import appli.controller.domaine.caisse.ContextAppliCaisse;
+import appli.controller.domaine.personnel.bean.ClientBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.service.IClientService;
+import appli.model.domaine.caisse.service.ITicketCaisseService;
+import appli.model.domaine.fidelite.dao.IPortefeuille2Service;
+import appli.model.domaine.stock.service.impl.FactureVentePDF;
+import appli.model.domaine.util_srv.printCom.ticket.PrintTicketSituationUtil;
+import appli.model.domaine.util_srv.printCom.ticket.PrintTicketUtil;
+import appli.model.domaine.vente.persistant.CaisseMouvementArticlePersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import framework.component.complex.table.RequestTableBean;
+import framework.controller.ActionBase;
+import framework.controller.ActionUtil;
+import framework.controller.annotation.WorkController;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BigDecimalUtil;
+import framework.model.common.util.BooleanUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.DateUtil.TIME_ENUM;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.ServiceUtil;
+
+@WorkController(nameSpace = "pers", bean = ClientBean.class, jspRootPath = "/domaine/personnel/")
+public class ClientCaisseAction extends ActionBase {
+	@Inject
+	private IClientService clientService;
+	@Inject
+	private IPortefeuille2Service portefeuille2Service;
+	
+	/**
+	 * @param httpUtil
+	 */
+	public void  find_mvm_client(ActionUtil httpUtil){
+		String[][] typeCmd = {{ContextAppli.TYPE_COMMANDE.E.toString(), "A emporter"}, 
+				  {ContextAppli.TYPE_COMMANDE.P.toString(), "Sur place"}, 
+				  {ContextAppli.TYPE_COMMANDE.L.toString(), "Livraison"}
+				  };
+		httpUtil.setRequestAttribute("typeCmd", typeCmd);
+		String[][] statutArray = {
+				{ContextAppli.STATUT_JOURNEE.OUVERTE.getStatut(), ContextAppli.STATUT_JOURNEE.OUVERTE.toString()}, 
+				{ContextAppli.STATUT_JOURNEE.CLOTURE.getStatut(), ContextAppli.STATUT_JOURNEE.CLOTURE.toString()} 
+			};
+		httpUtil.setRequestAttribute("statutArray", statutArray);
+		
+		RequestTableBean cplxTable = getTableBean(httpUtil, "list_caisseMouvement");
+		
+		Long clientId = (Long)httpUtil.getMenuAttribute("clientId");
+		cplxTable.getFormBean().getFormCriterion().put("clientId", clientId);
+		
+		List<CaisseMouvementPersistant> listCaisseMouvement = (List<CaisseMouvementPersistant>) clientService.findByCriteriaByQueryId(cplxTable, "caisseMouvement_tiers_find");
+		httpUtil.setRequestAttribute("list_caisseMouvement", listCaisseMouvement);
+		
+		// Total
+		List<CaisseMouvementPersistant> listCaisseMouvementAll = (List<CaisseMouvementPersistant>) clientService.findByCriteriaByQueryId(cplxTable, "caisseMouvement_tiers_find", false);
+		CaisseMouvementPersistant mvmTotal = new CaisseMouvementPersistant();
+		for (CaisseMouvementPersistant mvmDet : listCaisseMouvementAll) {
+			mvmTotal.setMtt_art_offert(BigDecimalUtil.add(mvmTotal.getMtt_art_offert(), mvmDet.getMtt_art_offert()));
+			mvmTotal.setMtt_art_reduction(BigDecimalUtil.add(mvmTotal.getMtt_art_reduction(), mvmDet.getMtt_art_reduction()));
+			mvmTotal.setMtt_commande(BigDecimalUtil.add(mvmTotal.getMtt_commande(), mvmDet.getMtt_commande()));
+			mvmTotal.setMtt_commande_net(BigDecimalUtil.add(mvmTotal.getMtt_commande_net(), mvmDet.getMtt_commande_net()));
+			mvmTotal.setMtt_reduction(BigDecimalUtil.add(mvmTotal.getMtt_reduction(), mvmDet.getMtt_reduction()));
+			mvmTotal.setMtt_annul_ligne(BigDecimalUtil.add(mvmTotal.getMtt_annul_ligne(), mvmDet.getMtt_annul_ligne()));
+		}
+		httpUtil.setRequestAttribute("mvmDetTotal", mvmTotal);
+		
+		httpUtil.setDynamicUrl("/domaine/personnel/client_mouvements.jsp");
+	}
+	
+	
+	public void print_ticket_client(ActionUtil httpUtil){
+		Long clientId = httpUtil.getLongParameter("cli");
+		boolean isSituation = httpUtil.getParameter("isSit") != null;
+		
+		List<CaisseMouvementPersistant> listMvm = portefeuille2Service.getListMouvementPortefeuille(clientId, "CLI");
+		List<CaisseMouvementPersistant> listMvmRecharge = portefeuille2Service.getListMouvementRechargePortefeuille(clientId, "CLI");
+		if(listMvm.size() == 0 && listMvmRecharge.size() == 0){
+			MessageService.addGrowlMessage("", "Aucune commande portefeuille n'a été trouvée.");
+			return;
+		} 
+		boolean isPotefeuilleOnly = httpUtil.getParameter("isRes") != null;
+		CaisseMouvementPersistant caisseMvmP = getMouvementGroupedPrint(httpUtil, listMvm, listMvmRecharge);
+		
+		if(isSituation) {// Situation client
+			Date dataJ = ContextAppliCaisse.getJourneeBean().getDate_journee();
+			ITicketCaisseService ticketCaisseSrv = ServiceUtil.getBusinessBean(ITicketCaisseService.class);
+			Map<String, BigDecimal> mapData = ticketCaisseSrv.getSituationClient(null, clientId,
+						DateUtil.addSubstractDate(dataJ, TIME_ENUM.YEAR, -30), 
+						DateUtil.addSubstractDate(dataJ, TIME_ENUM.DAY, 2));
+			
+			
+			MessageService.getGlobalMap().put("CURRENT_CAISSE", listMvm.get(0).getOpc_caisse_journee().getOpc_caisse());
+			PrintTicketSituationUtil pu = new PrintTicketSituationUtil(listMvm.get(0), mapData);
+			boolean isAsync = printData(httpUtil, pu.getPrintPosBean());
+			
+			if(!isAsync) {
+				httpUtil.writeResponse("OK");
+			} else {
+				forwardToPriterJsp(httpUtil);
+			}
+			return;
+		}
+		
+		MessageService.getGlobalMap().put("CURRENT_CAISSE", ContextAppliCaisse.getCaisseBean());
+		PrintTicketUtil pu = new PrintTicketUtil(caisseMvmP, null);
+		boolean isAsync = printData(httpUtil, pu.getPrintPosBean());
+		
+		if(!isAsync) {
+			httpUtil.writeResponse("");
+		} else {
+			forwardToPriterJsp(httpUtil);
+		}
+	}
+	
+	private CaisseMouvementPersistant getMouvementGroupedPrint(ActionUtil httpUtil,
+			List<CaisseMouvementPersistant> listMvm, 
+			List<CaisseMouvementPersistant> listMvmRecharge){
+		
+		Date dateDebut = (Date) httpUtil.getMenuAttribute("dateDebut");
+		Date dateFin = (Date) httpUtil.getMenuAttribute("dateFin");
+		
+		CaisseMouvementPersistant caisseMvmP = new CaisseMouvementPersistant();
+		
+		if(listMvm == null || listMvm.size() == 0) {
+			return null;
+		}
+		
+		CaisseMouvementPersistant caisseMvmSel = listMvm.get(0);
+		ReflectUtil.copyProperties(caisseMvmP, caisseMvmSel);
+		
+		caisseMvmP.setId(null);
+		caisseMvmP.setRef_commande(caisseMvmSel.getRef_commande());
+		caisseMvmP.setLast_statut(ContextAppli.STATUT_CAISSE_MOUVEMENT_ENUM.VALIDE.toString());
+		caisseMvmP.setList_article(new ArrayList<>());
+		//
+		
+		int idxCli = 1;
+		List<CaisseMouvementArticlePersistant> listArtDet = new ArrayList<>();
+		//
+//		BigDecimal mtt_art_offert = null, 
+//				mtt_commande = null, 
+//				mtt_commande_net = null, 
+//				mtt_reduction = null;
+		BigDecimal mttNetCmd = null;
+		for (CaisseMouvementPersistant caisseMvm : listMvm) {
+			if(BigDecimalUtil.isZero(caisseMvm.getMtt_commande_net()) 
+					|| BooleanUtil.isTrue(caisseMvm.getIs_annule())){
+				continue;
+			}
+			List<CaisseMouvementArticlePersistant> list_article = caisseMvm.getList_article();
+			
+			if(list_article.size()==1 
+					&& ContextAppli.TYPE_LIGNE_COMMANDE.RECHARGE_PF.toString().equals(list_article.get(0).getType_ligne())){
+				continue;
+			}
+			
+			for (CaisseMouvementArticlePersistant caisseMvmArticleP : list_article) {
+				if(BooleanUtil.isTrue(caisseMvmArticleP.getIs_annule())){
+					continue;
+				}
+				CaisseMouvementArticlePersistant mvmDetClone = (CaisseMouvementArticlePersistant) ReflectUtil.cloneBean(caisseMvmArticleP);
+				mvmDetClone.setMtt_total(BigDecimalUtil.negate(mvmDetClone.getMtt_total()));
+				mvmDetClone.setIdx_client(idxCli);
+				mvmDetClone.setOpc_mouvement_caisse(caisseMvmP);
+				
+				mttNetCmd = BigDecimalUtil.add(mttNetCmd, mvmDetClone.getMtt_total());
+				
+				listArtDet.add(mvmDetClone);
+			}
+		}
+		caisseMvmP.setMtt_art_reduction(null);
+		caisseMvmP.setMtt_art_offert(null);
+		caisseMvmP.setMtt_commande(null);
+		caisseMvmP.setMtt_commande_net(null);
+		caisseMvmP.setMtt_reduction(null);
+		//
+		caisseMvmP.setMax_idx_client(idxCli);
+		caisseMvmP.setList_article(listArtDet);
+		
+		// ---------------------------------------------------
+		if(listMvmRecharge != null){
+			for (CaisseMouvementPersistant caisseMvm : listMvmRecharge) {
+				if(BigDecimalUtil.isZero(caisseMvm.getMtt_commande_net()) 
+						|| BooleanUtil.isTrue(caisseMvm.getIs_annule())){
+					continue;
+				}
+				if(caisseMvm.getDate_vente() == null || dateDebut == null || dateFin == null) {
+					continue;
+				}
+				if(caisseMvm.getDate_vente().before(dateDebut)
+						 || caisseMvm.getDate_vente().after(dateFin)) {
+					continue;
+				}
+				
+				List<CaisseMouvementArticlePersistant> list_article = caisseMvm.getList_article();
+				for (CaisseMouvementArticlePersistant caisseMvmArticleP : list_article) {
+					CaisseMouvementArticlePersistant mvmDetClone = (CaisseMouvementArticlePersistant) ReflectUtil.cloneBean(caisseMvmArticleP);
+					mvmDetClone.setLibelle("Recharge le "+DateUtil.dateToString(caisseMvm.getDate_vente()));
+					mvmDetClone.setIdx_client(1);
+					mvmDetClone.setOpc_mouvement_caisse(caisseMvmP);
+					mvmDetClone.setMtt_total(mvmDetClone.getMtt_total());
+					caisseMvmP.getList_article().add(mvmDetClone);
+				}
+//				BigDecimal mttNetCmd = caisseMvm.getMtt_commande_net();
+//				BigDecimal mttCmd = caisseMvm.getMtt_commande();
+		        	
+//				caisseMvmP.setMtt_commande(BigDecimalUtil.substract(caisseMvmP.getMtt_commande(), mttCmd));
+//				caisseMvmP.setMtt_commande_net(BigDecimalUtil.substract(caisseMvmP.getMtt_commande_net(), mttNetCmd));
+			}
+		}
+		
+		Map<Long, CaisseMouvementArticlePersistant> mapMnuSort = new LinkedHashMap<>();
+		Map<Long, List<CaisseMouvementArticlePersistant>> mapArtSort = new LinkedHashMap<>();
+		CaisseMouvementArticlePersistant previous = null;
+		for (CaisseMouvementArticlePersistant caisseMvmArt : caisseMvmP.getList_article()) {
+			CaisseMouvementArticlePersistant mvmDetClone = (CaisseMouvementArticlePersistant) ReflectUtil.cloneBean(caisseMvmArt);
+			
+			if(BooleanUtil.isTrue(caisseMvmArt.getIs_annule())){
+				continue;
+			}
+			
+			if(caisseMvmArt.getOpc_menu() != null){
+				Long mnuId = caisseMvmArt.getOpc_menu().getId();
+				if(mapMnuSort.get(mnuId) == null){
+					if(previous != null){
+						mapMnuSort.put(previous.getId(), previous);
+					}
+					mapMnuSort.put(mnuId, caisseMvmArt);	
+				} else{
+					mvmDetClone.setQuantite(BigDecimalUtil.add(caisseMvmArt.getQuantite(), BigDecimalUtil.get(1)));
+				}
+				
+			} else if(caisseMvmArt.getOpc_article() != null){
+				Long famId = (ContextAppli.IS_RESTAU_ENV() ? 
+									caisseMvmArt.getOpc_article().getOpc_famille_cuisine().getId() : 
+										caisseMvmArt.getOpc_article().getOpc_famille_stock().getId());
+				
+				if(mapArtSort.get(famId) == null){
+					if(previous != null){
+						List<CaisseMouvementArticlePersistant> listDet2 = new ArrayList<>();
+						listDet2.add(previous);
+						mapArtSort.put(previous.getId(), listDet2);
+					}
+					List<CaisseMouvementArticlePersistant> listDet = new ArrayList<>();
+					listDet.add(mvmDetClone);
+					mapArtSort.put(famId, listDet);	
+				} else{
+					List<CaisseMouvementArticlePersistant> listDet = mapArtSort.get(famId);
+					boolean isFounded = false;
+					for(CaisseMouvementArticlePersistant detArt : listDet){
+						if(detArt.getOpc_article().getId().equals(caisseMvmArt.getOpc_article().getId())){
+							detArt.setQuantite(BigDecimalUtil.add(detArt.getQuantite(), caisseMvmArt.getQuantite()));
+							if(!BooleanUtil.isTrue(caisseMvmArt.getIs_offert())){
+								detArt.setMtt_total(BigDecimalUtil.add(detArt.getMtt_total(), caisseMvmArt.getMtt_total()));
+							} else{
+								
+							}
+							isFounded = true;
+							break;
+						}
+					}
+					
+					if(!isFounded){
+						listDet.add(mvmDetClone);
+					}
+				}
+			
+			} else if(!BigDecimalUtil.isZero(caisseMvmArt.getMtt_total())){
+				List<CaisseMouvementArticlePersistant> listDet = new ArrayList<>();
+				listDet.add(mvmDetClone);
+				mapArtSort.put(caisseMvmArt.getId(), listDet);
+			}
+			if(BooleanUtil.isTrue(caisseMvmArt.getIs_menu()) || caisseMvmArt.getOpc_article() == null){
+				previous = caisseMvmArt; 
+			}
+		}
+		List<CaisseMouvementArticlePersistant> listMvmSort = new ArrayList<>();
+		for(Long key : mapMnuSort.keySet()){
+			listMvmSort.add(mapMnuSort.get(key));
+		}
+		for(Long key : mapArtSort.keySet()){
+			listMvmSort.addAll(mapArtSort.get(key));
+		}
+		caisseMvmP.setList_article(listMvmSort);
+				
+		
+		// Ccalcul net
+//		BigDecimal mttCmd = null;
+//    	if(caisseMvmP.getListEncaisse() != null && caisseMvmP.getListEncaisse().size()>0){
+//			for (CaisseMouvementArticlePersistant cmd : caisseMvmP.getListEncaisse()) {
+//				if(!BooleanUtil.isTrue(cmd.getIs_annule()) && !BooleanUtil.isTrue(cmd.getIs_offert())){
+//					mttNetCmd = BigDecimalUtil.add(mttNetCmd, cmd.getMtt_total());
+//				}
+//	    	}
+//			mttCmd = BigDecimalUtil.add(mttCmd, caisseMvmP.getMtt_commande());
+//    	} else{
+//    		mttNetCmd = caisseMvmP.getMtt_commande_net();
+//    		mttCmd = caisseMvmP.getMtt_commande();
+//    	}
+//        
+//    	if(!isPotefeuilleOnly || caisseMvmP.getMode_paiement().indexOf("RESERVE") != -1){
+//    		mtt_art_offert = BigDecimalUtil.add(mtt_art_offert, caisseMvmP.getMtt_art_offert());
+//    		mtt_commande = BigDecimalUtil.add(mtt_commande, mttCmd);
+//    		mtt_commande_net = BigDecimalUtil.add(mtt_commande_net, mttNetCmd);
+//    		mtt_reduction = BigDecimalUtil.add(mtt_reduction, caisseMvmP.getMtt_reduction());
+//    	}
+		caisseMvmP.setMtt_commande_net(mttNetCmd);
+		
+		return caisseMvmP;
+	}
+	
+	public void print_ticket_cmd(ActionUtil httpUtil){
+		List<CaisseMouvementPersistant> listMvm = new ArrayList<>();		
+		boolean isPotefeuilleOnly = httpUtil.getParameter("isRes") != null;
+		boolean isSituation = httpUtil.getParameter("isSit") != null; 
+		
+		//
+		if(httpUtil.getParameter("src") == null){// Si on ne vient pas depuis la situation client dans le BO
+			Long[] checkedArray = httpUtil.getCheckedElementsLong("list_caisseMouvement");
+			if(checkedArray == null || checkedArray.length == 0){
+				MessageService.addGrowlMessage("", "Veuillez sélectionner au moins une commande.");
+				return;
+			}
+			for (Long mvmId : checkedArray) {
+				CaisseMouvementPersistant caisseMvmSel  = clientService.findById(CaisseMouvementPersistant.class, mvmId);
+				listMvm.add(caisseMvmSel);
+			}
+		} else{// Si on ne vient pas depuis la situation client dans la caisse
+			new CaisseWebBaseAction().init_situation_mvm(httpUtil);
+
+			List<CaisseMouvementPersistant> listMvmData = (List<CaisseMouvementPersistant>) httpUtil.getRequestAttribute("listMouvement");
+			
+			if(isSituation) {// Situation client
+				Map mapData = (Map) httpUtil.getRequestAttribute("MapRazCli");
+				
+				MessageService.getGlobalMap().put("CURRENT_CAISSE", listMvmData.get(0).getOpc_caisse_journee().getOpc_caisse());
+				PrintTicketSituationUtil pu = new PrintTicketSituationUtil(listMvmData.get(0), mapData);
+				
+				boolean isAsync = printData(httpUtil, pu.getPrintPosBean());
+				if(isAsync) {
+					forwardToPriterJsp(httpUtil);
+				} else {
+					httpUtil.writeResponse("OK");
+				}
+				return;
+			} else {
+				for (CaisseMouvementPersistant caisseMouvementP : listMvmData) {
+					String modePaiement = caisseMouvementP.getMode_paiement();
+					if(!isPotefeuilleOnly || (modePaiement!= null && modePaiement.indexOf("RESERVE") != -1)){
+						listMvm.add(caisseMouvementP);
+					}
+				}
+			}
+		}
+		Long clientId = (Long) httpUtil.getMenuAttribute("elementId");
+		List<CaisseMouvementPersistant> listMvmRecharge = portefeuille2Service.getListMouvementRechargePortefeuille(clientId, "CLI");
+		
+		CaisseMouvementPersistant caisseMvmP = getMouvementGroupedPrint(httpUtil, listMvm, listMvmRecharge);
+		if(caisseMvmP == null) {
+			return;
+		}
+		
+		if("T".equals(httpUtil.getParameter("tpp"))){
+			MessageService.getGlobalMap().put("CURRENT_CAISSE", listMvm.get(0).getOpc_caisse_journee().getOpc_caisse());
+			PrintTicketUtil pu = new PrintTicketUtil(caisseMvmP, null);
+			
+			boolean isAsync = printData(httpUtil, pu.getPrintPosBean());
+			if(isAsync) {
+				forwardToPriterJsp(httpUtil);
+			} else {
+				httpUtil.writeResponse("OK");
+			}
+		} else{//Facture pdf
+			httpUtil.doDownload(new FactureVentePDF(caisseMvmP, true).exportPdf(), true);
+		}
+	}
+}

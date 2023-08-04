@@ -1,0 +1,182 @@
+<%@page import="java.util.Map"%>
+<%@page import="java.util.List"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="appli.controller.domaine.stock.bean.FamilleBean"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<style>
+	.labelROnly{
+		margin-top: 6px;
+	}
+</style>
+
+ <script src="resources/framework/js/util_file_upload.js?v=1.1"></script>
+
+<%
+String tp = (String) ControllerUtil.getMenuAttribute("tp", request);
+if(tp == null){
+	tp = "ST";
+}
+%>
+
+<script type="text/javascript">
+$(document).ready(function() {
+	
+	getTabElement("#generer_code").click(function(){
+		executePartialAjax($(this), '<%=EncryptionUtil.encrypt("stock.famille.generer_code")%>', 'famille.code', true, true, null, true);
+	});
+
+	
+<%if(!tp.equals("CO")){ %>	
+	
+	<%if(ControllerUtil.isEditionWritePage(request)){%>
+		loadInputFileEvents();
+	<% } else{%>
+		getTabElement("#sep_photo1").remove();
+	<%}%>
+	
+	<%
+	FamilleBean familleBean = (FamilleBean)request.getAttribute("famille");
+	if(familleBean != null && familleBean.getId() != null){ 
+		IArticleService service = (IArticleService)ServiceUtil.getBusinessBean(IArticleService.class);
+		Map<String, byte[]> dataimg = service.getDataImage(familleBean.getId(), "famille");
+		if(dataimg.size() > 0){
+			String fileName = dataimg.entrySet().iterator().next().getKey();
+			byte[] value = dataimg.entrySet().iterator().next().getValue();
+		%>
+			getTabElement("#photo1_div").css("background", "");
+			getTabElement("#photo1_div").html("<img src='data:image/jpeg;base64,<%=FileUtil.getByte64(value) %>' width='120' height='120'/>");
+			getTabElement("#photo1_name_span").text("<%=fileName%>");
+			getTabElement("#photo1_name").val("<%=fileName%>");
+		<%}} %>
+<%}%>	
+});
+</script>
+
+<std:form name="data-form">
+	<input type="hidden" name="images_uploaded" id="images_uploaded" value=";">
+	<input type="hidden" name="images_names" id="images_names" value=";">
+	<input type="hidden" name="MAX_FILE_SIZE" value="2097152" />
+				
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">Fiche famille</span>
+			<c:if test="${empty isEditable or isEditable }">
+				<std:link actionGroup="U" targetDiv="generic_modal_body" classStyle="btn btn-default" action="stock.famille.work_init_update" workId="${famille.id}" icon="fa fa-pencil" tooltip="Modifier" />
+			</c:if>
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			<c:if test="${not empty famille.id }">
+				<div class="row">
+					<std:label classStyle="control-label col-md-2" value="Parent" />
+					<div class="col-md-10">
+						<std:select name="famille.parent_id" type="long" key="id" labels="code;'-';libelle" data="${listFamille}" required="true" isTree="true" width="100%" value="${parent_fam }"/>
+					</div>
+				</div>
+			</c:if>	
+			<div class="row" style="margin-top: 10px;">
+				<!-- Formulaire de saisie de type famille -->
+				<input type="hidden" name="fam_worksys" value="${fam }">
+
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Code"/>
+					<div class="col-md-9">
+						<std:text name="famille.code" type="string" placeholder="Code" required="true" iskey="true" style="width: 100px;float: left;"/>
+						<% if(ControllerUtil.isEditionCreateAction(request)){ %>
+							<a class="refresh-num" id="generer_code" href="javascript:" title="Générer un code de famille">
+				            	<i class="fa fa-refresh"></i>
+				        	</a>
+			        	<% }%>
+					</div>
+				</div>
+				<div class="form-group">	
+					<std:label classStyle="control-label col-md-3" valueKey="famille.libelle" />
+					<div class="col-md-9">
+						<std:text name="famille.libelle" type="string" placeholderKey="famille.libelle" required="true" />
+					</div>
+				</div>
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Commentaire" />
+					<div class="col-md-9">
+						<std:textarea name="famille.description" style="width:100%;" rows="5" cols="60" maxlength="255" />
+					</div>
+					
+				</div>
+			</div>
+			
+<%if(!tp.equals("CO")){ %>			
+			<!-- Photos -->
+			<div class="row">
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Image" />
+					<div class="col-md-4">
+						<div class="col-sm-12">	
+							<div id="photo1_div" style="width: 150px;margin-top:10px; border: 1px solid #c6d983; border-radius: 25px; text-align: center; height: 120px; background: url('resources/framework/img/picture_file.png') no-repeat center;cursor: pointer;">
+								<span style="font-size: 11px;">Image</span>
+							</div>
+							<span id="photo1_name_span"></span>
+							<input type="hidden" name="photo1_name" id="photo1_name">
+						</div>	
+						<div class="col-sm-12">
+							<!-- Separator -->
+							<div id="sep_photo1" style="width:120px;margin-bottom: 5px; height: 20px; text-align: center;">
+								<a href="javascript:"><b>X</b></a>
+							</div>
+							<!-- End -->
+							<input type="file" name="photo1" id="photo1_div_file" style="display: none;" accept="image/bmp,image/gif,image/jpg,image/png,image/jpeg">
+						</div>
+					</div>
+					
+					<%if(tp.equals("CU")){ %>
+					<std:label classStyle="control-label col-md-2" value="Caisses destination" />
+					<div class="col-md-4">
+						<std:select name="famille.caisses_target" multiple="true" type="string[]" key="id" labels="reference" data="${listeCaisse}" value="${caisseArray }" width="100%" />
+						<img class="tooltip-lg" data-toggle="tooltip" data-placement="top" data-original-title="Laissez ce champs vide si l'article doit s'afficher dans toutes les caisses" src="resources/framework/img/info.png" style="vertical-align: bottom;"/>
+					</div>
+					<std:label classStyle="control-label col-md-2" value="Non caisse"/>
+					<div class="col-md-4">
+						<std:checkbox name="famille.is_noncaisse"/>
+						<img class="tooltip-lg" data-toggle="tooltip" data-placement="top" data-original-title="Ne pas afficher dans la caisse" src="resources/framework/img/info.png" style="vertical-align: bottom;"/>					
+					</div>
+					<%} %>			
+			</div>
+		</div>
+<%} %>		
+		
+		<hr>
+		<div class="modal-footer">
+		<%if (ControllerUtil.getMenuAttribute("IS_SUB_ADD", request) != null) { %>
+				<std:button actionGroup="M" closeOnSubmit="true" targetDiv="xxxx" params="w_nos=1" onComplete="$('#refresh-ajx').trigger('click');" classStyle="btn btn-success" action="stock.famille.work_merge" icon="fa-save" value="Sauvegarder" />
+		<%} else { %>
+			<std:button actionGroup="M" classStyle="btn btn-success" action="stock.famille.work_merge" workId="${famille.id }" icon="fa-save" value="Sauvegarder" />
+		<%} %>	
+			<std:button actionGroup="D" classStyle="btn btn-danger" action="stock.famille.work_delete" workId="${famille.id }" icon="fa-trash-o" value="Supprimer" />
+			<button type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal">
+				<i class="fa fa-times"></i> Fermer
+			</button>
+		</div>
+
+	</div>
+</div>
+</std:form>
+
+<script type="text/javascript">
+/*Handles ToolTips*/
+$("[data-toggle=tooltip]")
+    .tooltip({
+        html: true
+    });
+</script> 

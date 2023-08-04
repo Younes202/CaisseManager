@@ -1,0 +1,173 @@
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.util.FileUtil"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="java.util.List"%>
+<%@page import="appli.model.domaine.stock.persistant.ArticlePersistant"%>
+<%@page import="java.util.Map"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="appli.controller.domaine.caisse.action.CaisseWebBaseAction"%>
+<%@page import="appli.model.domaine.stock.service.IArticleService"%>
+<%@page import="framework.model.common.util.ServiceUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<%
+int HEIGHT_HEADER = 250;
+int WIDTH_CMD = 420;
+int HEIGHT_DETAIL = 370;
+boolean isCaisseNotFermee = ContextAppli.getEtablissementBean() != null 
+	&& ContextAppliCaisse.getJourneeCaisseBean() != null
+	&& ContextAppliCaisse.getJourneeCaisseBean().getStatut_caisse().equals("O");
+boolean isJourneeCaisseOuverte = isCaisseNotFermee;
+boolean isJourneeOuverte = (ContextAppliCaisse.getJourneeBean() != null && ContextAppliCaisse.getJourneeBean().getStatut_journee().equals("O"));
+%>
+
+<script type="text/javascript">
+$(document).ready(function (){
+	refreshSize();
+	$("#left-div").show();
+	
+	<%String imgBack = null;%>
+	var tempo = 90000;
+	// Tempo pour effacer l'�cran
+	var timer = window.setTimeout(function(){
+	}, tempo)
+	// Mise en veille de l'�cran
+	$(".tab-content a").click(function(){
+		window.clearTimeout(timer);
+		$("#img-back-cmd").remove();
+		
+		timer = window.setTimeout(function(){
+			<%IArticleService service = (IArticleService)ServiceUtil.getBusinessBean(IArticleService.class);
+			Map<String, byte[]> dataimg = service.getDataImage(ContextAppli.getEtablissementBean().getId(), "paramFE");
+			if(dataimg.size() > 0){
+				imgBack = "data:image/jpeg;base64,"+FileUtil.getByte64(dataimg.entrySet().iterator().next().getValue());%>
+				$("#menu-detail-div").html("<img id='img-back-cmd' src='<%=imgBack%>' width='100%' height='100%'>");
+			<%} else{%>
+				$("#menu-detail-div").html('');
+			<%}%>
+		}, tempo)
+	});
+});
+</script>
+
+<c:set var="encryptionUtil" value="<%=new EncryptionUtil()%>" />
+
+	<div style="float: left;">
+		<!-- Familles et menus -->
+		<div style="height: <%=HEIGHT_DETAIL+20%>px;float: left;" id="famille-div">
+			
+<%if(isJourneeCaisseOuverte){ %>			
+                 <c:set var="genericService" value="<%=ServiceUtil.getBusinessBean(IArticleService.class) %>" />
+                 <c:set var="caisseWeb" value="<%=new CaisseWebBaseAction() %>" />
+                
+                <div style="height: <%=HEIGHT_DETAIL%>px;overflow-y: auto;overflow-x: hidden;<%=CaisseWebBaseAction.GET_STYLE_CONF("PANEL_MENU_FAMILLE", null)%>">
+					<div class="col-md-5">
+						<h1 style="
+						text-align: center;
+					    margin-bottom: 17px;
+					    margin-top: 2px;
+					    background-color: #000000;
+					    color: white;">MENUS</h1>
+				         <c:forEach var="menu" items="${listMenu }">
+				         	<std:link style='${caisseWeb.GET_STYLE_CONF("BUTTON_MENU", "COULEUR_TEXT_MENU")};' action="caisse-web.caisseWeb.loadMenu" targetDiv="menu-detail-div" workId="${menu.id }" classStyle="caisse-top-btn menu-btn" value="">
+				         		<span class="span-img-stl">
+				         			<img alt="" src="resourcesCtrl?elmnt=${encryptionUtil.encrypt(menu.getId().toString())}&path=menu&rdm=${menu.date_maj.getTime()}" class="img-caisse-stl">
+				         		</span>
+				         		<span class="span-libelle-stl">${menu.libelle }</span>
+				         	</std:link>
+						</c:forEach>
+                   </div>
+					<div class="col-md-7" style="border-left: 2px solid orange;">
+						<h1 style="text-align: center;
+						    margin-bottom: 17px;
+						    margin-top: 2px;
+						    background-color: #000000;
+						    color: white;">ARTICLES</h1>
+                   		<c:forEach var="famille" items="${listFamille }">
+                   			<std:link style='${caisseWeb.GET_STYLE_CONF("BUTTON_FAMILLE", "COULEUR_TEXT_FAMILLE")};' action="caisse-web.caisseWeb.familleEvent" targetDiv="menu-detail-div" workId="${famille.id }" classStyle="caisse-top-btn famille-btn" value="">
+	         					<span class="span-img-stl">
+	         						<img alt="" src="resourcesCtrl?elmnt=${encryptionUtil.encrypt(famille.getId().toString())}&path=famille&rdm=${famille.date_maj.getTime()}" class="img-caisse-stl">
+	         					</span>
+	         					<span class="span-libelle-stl">${famille.libelle }</span>
+	                   		</std:link>
+						</c:forEach>
+                 	</div>
+               </div>
+                        <%} else if (!isJourneeOuverte){%>
+                       			<h2 style="text-align: center;color: orange;top: 17%;left:30%;position:absolute;font-size: 67px;font-weight: bold !important;padding-top: 27px;">
+                        			<i class="fa fa-lock" style="color: red !important;"></i>
+                        			Journ&eacute;e Ferm&eacute;e
+                        		</h2>
+                        <%} else if(!isCaisseNotFermee){ %>
+                        	<h2 style="text-align: center;color: red;top: 17%;left:30%;position:absolute;font-size: 67px;font-weight: bold !important;padding-top: 27px;">
+                        		<i class="fa fa-lock" style="color: red !important;"></i>
+                        		Caisse Ferm&eacute;e
+                        	</h2>
+                        <%} %>
+		</div>
+	</div>
+	<!-- Commande d&eacute;tail -->
+	<div style="float: left;width: 100%;">
+	<%if(isJourneeCaisseOuverte){ %>	
+		<hr style="margin-top: -12px;margin-bottom: 0px;border-top: 2px solid orange;">
+		<%} %>
+		<div id="menu-detail-div" style='overflow-y: auto;overflow-x: hidden;padding: 5px;float: left;${caisseWebClient.GET_STYLE_CONF("PANEL_DETAIL", null)}'>
+			
+		</div>
+		
+		<div id="menu-left-div" style="width: 80px;float:left;padding-left: 9px;">
+		<%if(isJourneeCaisseOuverte){ %>	
+			<std:link id="up_btn" action="caisse-web.caisseWeb.upButtonEvent" targetDiv="menu-detail-div" classStyle="btn btn-default btn-circle btn-lg btn-menu shiny" tooltip="Monter d'un niveau">
+				<img src="resources/caisse/img/caisse-web/upload.png" />
+			</std:link>	
+			<hr>
+			<std:linkPopup action="caisse-web.caisseWebClient.initAuhentification" classStyle="btn btn-info btn-circle btn-lg btn-menu shiny" tooltip="Encaisser la commande">
+				<img src="resources/caisse/img/caisse-web/cash_register_sh.png" />
+			</std:linkPopup>
+			<%if(ControllerUtil.getUserAttribute("CURRENT_COMMANDE", request) != null){ %>
+			<hr>
+			<a id="annul_cmd_main" act="<%=EncryptionUtil.encrypt("caisse-web.caisseWebClient.annulerCommande")%>" class="btn btn-default btn-circle btn-lg btn-menu shiny" title="Annuler la commande">
+				<img src="resources/caisse/img/caisse-web/delete2.png" />
+			</a>
+			<%} 
+		} %>	
+		</div>
+	</div>
+<script type="text/javascript">
+$(document).ready(function (){
+	/*Handles Popovers*/
+	var popovers = $('[data-toggle=popover]');
+	$.each(popovers, function () {
+	    $(this)
+	        .popover({
+	            html: true,
+	            template: '<div class="popover ' + $(this)
+	                .data("class") +
+	                '"><div class="arrow"></div><h3 class="popover-title ' +
+	                $(this)
+	                .data("titleclass") + '">Popover right</h3><div class="popover-content"></div></div>'
+	        });
+	});
+
+	var hoverpopovers = $('[data-toggle=popover-hover]');
+	$.each(hoverpopovers, function () {
+	    $(this)
+	        .popover({
+	            html: true,
+	            template: '<div class="popover ' + $(this)
+	                .data("class") +
+	                '"><div class="arrow"></div><h3 class="popover-title ' +
+	                $(this)
+	                .data("titleclass") + '">Popover right</h3><div class="popover-content"></div></div>',
+	            trigger: "hover"
+	        });
+	});
+    });
+ </script> 

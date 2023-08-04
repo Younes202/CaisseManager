@@ -1,0 +1,81 @@
+
+/*---------------------CUSTOM THEME-------------------------*/
+.closeTabStl{
+	    color: red;
+	    position: absolute;
+	    right: -5px;
+	    top: 14px;
+	    z-index: 9999;
+	    cursor: pointer;
+	    margin-right: 3px;
+    }
+    .page-header.page-header-fixed+.page-body{
+    	margin-top: 16px !important;
+    	margin-left: -15px !important;;
+    	margin-right: -16px !important;;
+    }
+    .sidebar-menu a{
+    	background-color: black;
+    	color: white !important;
+    }
+    .sidebar-menu a:hover{
+    	background-color: #8c8c8c !important;
+    }
+    .sidebar-menu>li.open>a{
+    	background-color: #e95324 !important;
+    }
+    .page-sidebar .sidebar-menu .submenu li.active>a {
+    	background-color: #4d4d4d !important;
+    }
+    .page-sidebar .sidebar-menu .submenu>li.open>a {
+    	background-color: #535353 !important;
+    }
+    .nav>li>a:focus, .nav>li>a:hover{
+    	background-color: #8c8c8c !important;
+    }
+    .page-sidebar .menu-expand{
+    	color: white !important;
+    }
+    .page-header{
+	    background: #ffffff;
+	    margin-top: -16px;
+	    margin-left: -2px;
+	    margin-right: -10px;
+	    position: static !important;
+	    border: 2px solid #989898;
+	    border-radius: 8px;
+	    height: 44px;
+    }
+    .page-breadcrumbs.breadcrumbs-fixed+.page-header{
+    	margin-top: -9px;
+    	background: #fafafa;
+    	border: 2px solid #0a0909;
+    }
+    .page-body{
+    	background: #ffffff;
+    	padding-left: 0px;
+    	padding-right: 0px;
+    	padding-top: 3px;
+    }
+    .flexigrid {
+    	margin-left: 17px;
+    	width: 98% !important;
+    }
+    .form-group{
+    	margin-bottom: 5px;
+    }
+    #tabMnuNav{
+    	background: #eaeaea !important;
+    }
+    #tabMnuNav li{
+    	border-left: 1px solid #dec7c2;
+    	border-right: 3px solid #e95324;
+    	font-weight: bold;
+    }
+    #action-div button[targetbtn]{
+	    bottom: 1px;
+	    border-radius: 10px;
+	    height: 36px;
+	    font-size: 18px;
+	    padding-top: 0px;
+    }

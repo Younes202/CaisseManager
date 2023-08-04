@@ -1,0 +1,357 @@
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementArticlePersistant"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli.TYPE_LIGNE_COMMANDE"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="java.math.BigDecimal"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="java.util.Collections"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="java.util.List"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.BooleanUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+	
+<%
+CaisseMouvementPersistant caisseMouvement = (CaisseMouvementPersistant)request.getAttribute("caisseMouvement");
+Boolean isEdit = (Boolean)request.getAttribute("isEdit");
+Boolean isUpd = (Boolean)request.getAttribute("isUpd");
+Boolean isCodeFounded = (Boolean)request.getAttribute("isCodeFounded");
+%>	
+
+<script type="text/javascript">
+	$(document).ready(function (){
+		$('#mouvement\\.retour_ref_cmd').change(function(){
+			submitAjaxForm('<%=EncryptionUtil.encrypt("stock-caisse.mouvementStock.manageLecteursTicketCB")%>', 'ref='+$(this).val(), $("#data-form"), $(this));
+		});
+ 		
+		<% if(BooleanUtil.isTrue(isUpd) && caisseMouvement != null){%>
+			$('#detail-cmd-div').show();
+		<%}%>
+		<% if(BooleanUtil.isTrue(isEdit)){%>
+			$(".spinbox-up, .spinbox-down").hide();
+		<%}%>
+	
+		$(".spinbox-up").click(function(){
+			var caisseMvmId =$(this).closest('td').find('span').text();
+			var prix_unitaire = $(this).closest('td').find('div').text();//$(this).closest('tr').find('td[id^=mttTotal]').html();
+			var qte = $("#quantite_"+caisseMvmId).val();
+
+			var newQte = parseInt($("#quantite_"+caisseMvmId).val())+1;
+			$("#quantite_"+caisseMvmId).val(newQte);
+			
+			var newPrix = prix_unitaire*newQte;
+			$("#mtt_total_"+caisseMvmId).val(newPrix);
+			$(this).closest('tr').find('td[id^=mtt_total]').html(newPrix.toFixed(2));
+		});
+		$(".spinbox-down").click(function(){
+			var caisseMvmId =$(this).closest('td').find('span').text();
+			var prix_unitaire = $(this).closest('td').find('div').text();
+			var qte = $("#quantite_"+caisseMvmId).val();
+
+			if($("#quantite_"+caisseMvmId).val() != '' && parseInt($("#quantite_"+caisseMvmId).val()) >= 1){
+				var newQte = parseInt($("#quantite_"+caisseMvmId).val())-1;
+				$("#quantite_"+caisseMvmId).val(newQte);
+				
+				var newPrix = prix_unitaire*newQte;
+				$("#mtt_total_"+caisseMvmId).val(newPrix);
+				$(this).closest('tr').find('td[id^=mtt_total]').html(newPrix.toFixed(2));
+			}
+		});
+		
+		<% if(BooleanUtil.isTrue(isCodeFounded)){%>
+			$("#detail-cmd-div").show();
+		<%}%>
+	
+		<%-- Code barre --%>
+		var barcode="";
+	    $(document).keydown(function(e) {
+	    	<%-- Ne pas d�clencher si popup authentification ouverte --%>
+	    	if($("#generic_modal").length == 1 && ($("#generic_modal").css("display") != "none")){
+	    		return;
+	    	}
+	        var code = (e.keyCode ? e.keyCode : e.which);
+	        var sourceEvent = $(e.target).prop('nodeName');
+	        var isInput = (sourceEvent == 'INPUT') ? true : false;
+	        //
+	        if(!isInput && code==13 && $.trim(barcode) != ''){
+	        	if($.trim(barcode).length > 5){
+	        		e.preventDefault();
+		        	$("#targ_link").attr("targetDiv", "left-div");
+		        	submitAjaxForm('<%=EncryptionUtil.encrypt("stock-caisse.mouvementStock.manageLecteursTicketCB")%>', 'cb='+barcode, $("#data-form"), $("#targ_link"));
+	        	}
+	            barcode="";
+	        } else{
+	  			 barcode = barcode + String.fromCharCode(code);
+	        }
+	    });
+	});
+</script> 
+<!-- Page Breadcrumb -->
+<div class="page-breadcrumbs breadcrumbs-fixed">
+	<ul class="breadcrumb">
+		<li><i class="fa fa-home"></i> <a href="#">Accueil</a></li>
+		<li>Gestion de stock</li>
+		<li>Fiche retour</li>
+		<li class="active">Edition</li>
+	</ul>
+</div>
+
+<div class="page-header position-relative">
+	<div class="header-title" style="padding-top: 4px;">
+		<c:if test="${not empty mouvement.id }">
+			<std:link actionGroup="X" classStyle="btn btn-default" action="stock-caisse.mouvementStock.initRetourCaisse" workId="${mouvement.id }" params="isUpd=1" icon="fa-3x fa-pencil" tooltip="Modifier" />
+		</c:if>
+		<std:link classStyle="btn btn-default" action="stock.mouvementStock.find_retour_client" params="bck=1" icon="fa fa-3x fa-mail-reply-all" tooltip="Retour &agrave; la recherche" />
+	</div>
+	<!--Header Buttons-->
+	<jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+	<!--Header Buttons End-->
+</div>
+<!-- /Page Header -->
+
+<div class="page-body" id="div-body">
+	<div class="row">
+		<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+	</div>
+	<!-- widget grid -->
+	<std:form name="data-form">
+		<div class="widget">
+			<div class="widget-header bordered-bottom bordered-blue" style="padding-bottom: 5px; padding-top: 5px; padding-right: 5px;">
+				<span class="widget-caption"> Fiche retour</span>
+			</div>
+
+			<div class="widget-body">
+				<div class="row">
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-2" value="R&eacute;f&eacute;rence commande" />
+						<div class="col-md-4" id="reference_cmd" style="display: -webkit-box;">
+							<std:text name="mouvement.retour_ref_cmd" type="string" placeholder="R&eacute;f&eacute;rence" maxlength="50" style="width:50%;" value="${ref_commande }" required="true" />
+							<c:if test="${mouvement.id != null }">
+								<div style="margin-left: 25px;">
+									<std:linkPopup action="caisse.journee.edit_mouvement" actionGroup="C" icon="fa-eye" workId="${caisseMouvement_id }" classStyle="btn btn-sm btn-primary" tooltip="Voir d&eacute;tails de la commande"/>
+								</div>
+							</c:if>
+						</div>
+					</div>
+					<hr>
+					<!-- **************************** FINANCEMENT BLOC ********************** -->
+					<c:set var="menu_scope.PAIEMENT_DATA" value="${mouvement.getList_paiement() }" scope="session" />
+					<div class="form-group" id="finance_bloc">
+						<jsp:include page="/domaine/compta/paiement_consult.jsp"></jsp:include>
+					</div>
+					<!-- **************************** FIN FINANCEMENT BLOC ********************** -->
+				</div>
+			</div>
+		</div>
+		
+			<div class="widget" id="detail-cmd-div" style="display:none;">
+				<div class="widget-header bordered-bottom bordered-blue" style="padding-bottom: 5px; padding-top: 5px; padding-right: 5px;">
+					<span class="widget-caption"> D&eacute;tail de la commande</span>
+				</div>
+				<div class="widget-body">
+					<%if(caisseMouvement != null){ %>
+					<link href="resources/caisse/css/caisse.css?v=<%=StrimUtil.getGlobalConfigPropertie("version.resources")%>10" rel="stylesheet" />
+					
+					<div class="form-group" style="margin-top: 10px;margin-left: 0px;">
+						<div style="margin-left: -2px;max-height: 400px;overflow-y: auto;overflow-x:hidden;" >
+							<table style="width: 98%;color: black;margin-left: 2px;" id="cmd-table">
+								<std:hidden name="caisseMouvement.id" value="<%=caisseMouvement.getId() %>"/>
+								<c:set var="cpt" value="${1 }" />
+									<%
+									List<CaisseMouvementArticlePersistant> listSortedArticle = caisseMouvement.getList_article();
+									List<Integer> listIdxClient = new ArrayList();
+									for(CaisseMouvementArticlePersistant caisseMvmP : listSortedArticle){
+										if(BooleanUtil.isTrue(caisseMvmP.getIs_annule())){
+											continue;
+										}
+										if(!listIdxClient.contains(caisseMvmP.getIdx_client())){
+											listIdxClient.add(caisseMvmP.getIdx_client());
+										}
+									}
+									// Trier les tables
+									Collections.sort(listIdxClient);
+									
+										Integer idxArticle = 0;
+										int nbrNiveau = 0;
+										BigDecimal sousTotal = null;
+										int maxClient = (caisseMouvement.getMax_idx_client()==null?1:caisseMouvement.getMax_idx_client());
+										
+									for(int i=1; i<=maxClient; i++){  
+										if(!listIdxClient.contains(i)){
+											continue;
+										}
+											
+										if(listIdxClient.size() > 1){
+									    	   if(i != listIdxClient.get(0)){%>
+									    		   <tr style="color: black;font-weight: normal;background-color: #eeeeee;" class="client-root-style">
+										       			<td colspan="2" align="right">SOUS TOTAL</td>
+										       			<td align="right"><%=BigDecimalUtil.formatNumber(sousTotal) %></td> 
+										      	   </tr>
+									    	 <%}
+										}
+									    	   %>
+									  	<%if(listIdxClient.size()>1){ %>
+									    	   <tr style="color: black;background-color: #fff9c4;" class="client-root-style" par="idx_cli=<%=i %>&tp=CLI">
+										       		<td colspan="3" style="border-radius: 15px;" align="left">CLIENT <%=i %></td>
+										       </tr>
+									      <%
+										}
+									    sousTotal = null;
+									    
+										for(CaisseMouvementArticlePersistant caisseMvmP : caisseMouvement.getList_article()){
+											
+											sousTotal = BigDecimalUtil.add(sousTotal, caisseMvmP.getMtt_total());
+									       boolean isAnnule = BooleanUtil.isTrue(caisseMvmP.getIs_annule());
+									       
+									       // Ajout du num�ro dans le tableau
+									       String type = caisseMvmP.getType_ligne();
+									       String libCmd = caisseMvmP.getLibelle();
+									       Long caisseMvmId = caisseMvmP.getId();
+									       BigDecimal artPrix = null;
+									       if(caisseMvmP.getMtt_total().compareTo(BigDecimalUtil.ZERO) != 0 && caisseMvmP.getQuantite().compareTo(BigDecimalUtil.ZERO) != 0){
+									       	artPrix = BigDecimalUtil.divide(caisseMvmP.getMtt_total(), caisseMvmP.getQuantite());
+									       }
+									       if(type == null){
+									           type = "XXX";
+									       }
+									       
+									      if(type.equals(TYPE_LIGNE_COMMANDE.ART.toString())){
+									           idxArticle++;
+									           libCmd = idxArticle + "-" + libCmd;
+									       }
+									       
+									       if(StringUtil.isNotEmpty(caisseMvmP.getCommentaire())){
+									           libCmd = libCmd + " <i class='fa fa-comments-o' style='color:orange;font-size: 17px;cursor:pointer;' data-container='body' data-titleclass='bordered-blue' data-class='' data-toggle='popover' data-placement='top' data-title='Commentaire' data-content='"+caisseMvmP.getCommentaire()+"' data-original-title='' title=''></i>";
+									       }
+									       
+									       Integer qte = (caisseMvmP.getQuantite() != null ? caisseMvmP.getQuantite().intValue() : null);
+									       String mttTotal = "";
+									       if(!BigDecimalUtil.isZero(caisseMvmP.getMtt_total())){
+									    	   mttTotal = BigDecimalUtil.formatNumber(caisseMvmP.getMtt_total());
+									       }
+									       
+									       String styleTd = "";
+									       String classType = "";
+									   	   if(type.equals(TYPE_LIGNE_COMMANDE.ART.toString())){
+									   		   classType = "ligne-fam-style";
+									   		   nbrNiveau = 0;
+									          } else if(type.equals(TYPE_LIGNE_COMMANDE.GROUPE_FAMILLE.toString())){
+									       	   classType = "famille-style";
+									       	   nbrNiveau++;
+									          } 
+									       
+									       String params = "cd="+caisseMvmP.getCode()+"&elm="+caisseMvmP.getElementId()+"&par="+StringUtil.getValueOrEmpty(caisseMvmP.getParent_code())+"&tp="+caisseMvmP.getType_ligne();
+									       if(caisseMvmP.getLevel() != null){
+									    	   styleTd = styleTd + "padding-left:"+(6*caisseMvmP.getLevel())+"px;";
+									       }
+									      
+									       boolean isArticle = type.equals(TYPE_LIGNE_COMMANDE.ART.toString());
+									       %>
+									       <std:hidden name="eaiid_${cpt}" value='<%=EncryptionUtil.encrypt(""+caisseMvmId) %>' />
+									       <tr class="<%=classType%>">
+									       		<td style="<%=styleTd %>"><%=libCmd %></td>
+									       		<td align="right" style="width: 10%;">
+									       			<span style="display:none;" ><%=caisseMvmId %></span>
+									       			<div style="display:none;" ><%=artPrix %></div>
+									       			<%if(type.equals(TYPE_LIGNE_COMMANDE.ART.toString())){ %>
+										       			<div class="spinbox spinbox-horizontal spinbox-right">
+		                                                    <div class="spinbox-buttons	btn-group">
+		                                                        <button type="button" class="btn spinbox-down blueberry">
+		                                                            <i class="fa fa-minus"></i>
+		                                                        </button>
+		                                                        <button type="button" class="btn spinbox-up purple">
+		                                                            <i class="fa fa-plus"></i>
+		                                                        </button>
+		                                                    </div>
+		                                                    <input type="text" id="quantite_<%=caisseMvmId %>" name="quantite_${cpt}" class="spinbox-input form-control" value="<%=qte %>" readonly="readonly"/>
+		                                                    <input type="text" id="mtt_total_<%=caisseMvmId%>" name="mtt_total_${cpt}" value="<%=mttTotal %>" style="display:none;"/>
+		                                                    <input type="text" name="prix_unitaire_${cpt}" value="<%=artPrix %>" style="display:none;"/>
+		                                                    <input type="text" name="old_qte_${cpt}" value="<%=qte %>" style="display:none;"/>
+		                                                    <input type="text" name="opc_article.id_${cpt}" value="<%=caisseMvmP.getOpc_article().getId() %>" style="display:none;"/>
+		                                                </div>
+		                                              <%} %>
+									       		</td>
+									       		<td align="right" id="mtt_total_<%=caisseMvmId%>"><%=mttTotal %></td>
+									       </tr>
+									       <c:set var="cpt" value="${cpt+1 }" /> 
+									       <%
+									   }
+									}
+									
+									if(maxClient > 1){%>
+									 <tr style="color: black;background-color: #eeeeee;font-weight: normal;" class="menu-root-style">
+										<td colspan="2" align="right">SOUS TOTAL</td>
+										<td align="right"><%=BigDecimalUtil.formatNumber(sousTotal) %></td>
+									</tr>
+									<%}
+									   // Les offres
+									   if(caisseMouvement.getList_offre() != null && caisseMouvement.getList_offre().size() > 0){
+										   %>
+									       <tr style="color: green;" class="menu-root-style">
+									       		<td colspan="3" align="center">Offres</td>
+									       </tr>
+									 <%}%>     
+							</table>  
+						</div>
+					</div>
+					<%} %>
+			
+				</div>
+			</div>
+			<c:if test="${!isCodeFounded && isEdit}">
+				<div class="widget" id="div_detail">
+				         <div class="widget-header bordered-bottom bordered-blue">
+				            <span class="widget-caption">D&eacute;tail des composants</span>
+				         </div>
+				         <div class="widget-body">
+								<div class="row">
+								<table id="ctrl_table" style="width: 97%;margin-left: 20px;">
+									<tr>
+										<th>Composant</th>
+										<th width="60px"></th>
+										<th width="100px">Quantit&eacute;</th>
+									</tr>
+									<c:set var="cpt" value="${1 }" />
+									<c:set var="encodeService" value="<%=new EncryptionUtil()%>" />
+									
+									<c:forEach items="${mouvement.list_article }" var="articleMvm">
+										<std:hidden name="eaiid_${cpt}" value="${encodeService.encrypt(articleMvm.id) }" />
+										<tr>
+											<td style="padding-top: 5px; padding-right: 30px;" valign="top">
+												<std:select style="border-bottom: 1px solid #FF9800 !important;border-bottom-style: dashed !important;; width: 100% !important;" name="opc_article.id_${cpt}" hiddenkey="prix_achat_ht;opc_tva_enum.id" type="long" key="id" labels="code;'-';libelle" data="${listArticle }" value="${articleMvm.opc_article.id }" groupKey="opc_famille_stock.id" groupLabels="opc_famille_stock.code;'-';opc_famille_stock.libelle" />
+											</td>
+											<td style="padding-top: 5px; padding-right: 10px;" valign="top">
+												<std:linkPopup id="edit_article_${cpt}" classStyle="btn btn-sm btn-primary" action="stock.article.work_edit" params="isCmp=1&art=${articleMvm.opc_article.id }" noJsValidate="true">
+													<span class="fa  fa-eye"></span>
+												</std:linkPopup>
+											</td>
+											<td style="padding-top: 5px; padding-right: 30px;" valign="top">
+												<std:text style="border-bottom: 1px solid #FF9800 !important;border-bottom-style: dashed !important;width: 100px;" name="quantite_${cpt}" type="decimal" placeholderKey="mouvement.quantite" value="${articleMvm.quantite }"  maxlength="14"/>
+											</td>
+										</tr>
+										<c:set var="cpt" value="${cpt+1 }" /> 
+									</c:forEach>
+								</table>
+							</div>
+						</div>
+					</div>
+				</c:if>
+		<div class="form-actions">
+			<div class="row" style="text-align: center;" class="col-md-12" id="action-div">
+				<std:button actionGroup="M" classStyle="btn btn-success" action="stock.mouvement.mergeRetourCaisse" workId="${mouvement.id }" icon="fa-save" value="Sauvegarder" />
+				<std:button actionGroup="D" classStyle="btn btn-danger" action="stock.mouvement.work_delete" workId="${mouvement.id }" icon="fa-trash-o" value="Supprimer" />
+			</div>
+
+		</div>
+	</std:form>
+</div>
+
+<script src="resources/framework/js/fuelux/spinbox/fuelux.spinbox.min.js"></script>

@@ -1,0 +1,9 @@
+# Employ\u00e9 tableau
+client.list=Liste des clients
+client.nom=Nom
+client.prenom=Pr\u00e9nom
+client.numero=Num\u00e9ro
+client.civilite=Civilit\u00e9
+client.is_actif=Est actif
+client.telephone=Mobile
+client.mail=Mail

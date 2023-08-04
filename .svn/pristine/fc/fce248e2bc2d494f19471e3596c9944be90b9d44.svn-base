@@ -1,0 +1,39 @@
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+<%@page import="framework.controller.ControllerUtil"%>
+
+<%
+CaisseMouvementPersistant CURRENT_COMMANDE = (CaisseMouvementPersistant)ControllerUtil.getUserAttribute("CURRENT_COMMANDE", request);
+%>
+<div id="banner_foot_act" style="float: left;width: 100%;height: 50px;position: fixed;bottom: 0px;background-color: #d1d1d1;border-radius: 23px;border: 1px solid #FF9800;">
+     <!-- TOTAL COMMANDE -->
+	 <div id="cmd_total" class="label label-success" style="position: absolute;right: 20px;bottom: 10px;font-size: 22px;font-weight: bold;color: white;border-radius:15px !important;">
+	 
+	 </div>
+				
+<!-- 	<a href="javascript:void(0);" id="calc_lnk" style="color: #262626;font-weight: bold;" class="btn btn-default btn-circle btn-lg btn-menu shiny" data-container="body" data-titleclass="bordered-blue" data-class="" data-toggle="popover" data-placement="top" data-title=""  -->
+<%-- 		data-content="<%for(int i=0; i<10; i++){ %><a class='btn btn-blue btn-lg icon-only white btn-circle btn-calc ' href='javascript:void(0);'><%=i %></a><%} %><a class='btn btn-blue btn-lg icon-only white btn-circle btn-calc' href='javascript:void(0);'>C</a>" data-original-title="" title=""> --%>
+<!-- 		<img src="resources/caisse/img/caisse-web/calculator_blue.png" /> -->
+<!-- 	</a> -->
+
+		<!-- AFFICHER CACHER LA COMMANDE -->
+	<a id="lnk_panier_det" onClick="$('#left-div').toggle(500);" 
+				href="javascript:" style="padding-left: 6px;
+    				line-height: 42px;
+    				font-size: 19px;display: none;" 
+				class="">
+		<img src="resources/caisse/img/caisse-web/shopping_cart2.png" style="width:30px;" />
+		MA COMMANDE
+	</a>
+</div>
+

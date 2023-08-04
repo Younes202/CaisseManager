@@ -1,0 +1,9 @@
+# Employ\u00e9 tableau
+etatFinance.list=Liste des etatFinances
+etatFinance.nom=Nom
+etatFinance.prenom=Pr\u00e9nom
+etatFinance.numero=Num\u00e9ro
+etatFinance.civilite=Civilit\u00e9
+etatFinance.is_actif=Est actif
+etatFinance.telephone=Mobile
+etatFinance.mail=Mail

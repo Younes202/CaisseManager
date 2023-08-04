@@ -1,0 +1,370 @@
+package appli.model.domaine.administration.service.impl;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.persistence.EntityManager;
+import javax.persistence.Query;
+
+import org.springframework.transaction.annotation.Transactional;
+
+import appli.controller.domaine.administration.bean.UserBean;
+import appli.controller.domaine.util_erp.ContextAppli;
+import appli.model.domaine.administration.dao.IUserDao;
+import appli.model.domaine.administration.persistant.NotificationPersistant;
+import appli.model.domaine.administration.persistant.UserPersistant;
+import appli.model.domaine.administration.service.IUserService;
+import appli.model.domaine.administration.validator.UserValidator;
+import appli.model.domaine.caisse.persistant.LivreurPositionPersistant;
+import appli.model.domaine.vente.persistant.CaisseJourneePersistant;
+import appli.model.domaine.vente.persistant.CaisseMouvementPersistant;
+import appli.model.domaine.vente.persistant.CaissePersistant;
+import appli.model.domaine.vente.persistant.JourneePersistant;
+import framework.model.beanContext.EtablissementPersistant;
+import framework.model.common.annotation.validator.WorkModelClassValidator;
+import framework.model.common.annotation.validator.WorkModelMethodValidator;
+import framework.model.common.constante.ProjectConstante;
+import framework.model.common.constante.ProjectConstante.MSG_TYPE;
+import framework.model.common.service.MessageService;
+import framework.model.common.util.BooleanUtil;
+import framework.model.common.util.DateUtil;
+import framework.model.common.util.EncryptionEtsUtil;
+import framework.model.common.util.ReflectUtil;
+import framework.model.common.util.ServiceUtil;
+import framework.model.common.util.StrimUtil;
+import framework.model.common.util.StringUtil;
+import framework.model.service.GenericJpaService;
+import framework.model.util.audit.ReplicationGenerationEventListener;
+
+@Named
+@WorkModelClassValidator(validator=UserValidator.class)
+public class UserService extends GenericJpaService<UserBean, Long> implements IUserService{
+	@Inject
+	private IUserDao userDao;
+	
+	/* (non-Javadoc)
+	 * @see model.hibernate.service.user.IToto#getUserByLogingAndPw(java.lang.String, java.lang.String)
+	 */
+	@Override
+	public UserBean getUserByLoginAndPw(String login, String pw) { 
+		UserPersistant userPersistant = userDao.getUserByLoginAndPw(login, pw);
+
+		return (UserBean) ServiceUtil.persistantToBean(UserBean.class, userPersistant);
+	}
+
+	@Transactional
+	@Override
+    public void updateNewLivreurInfosTmp() {
+    	if(getQuery("from CaisseMouvementPersistant where opc_livreurU.id is not null")
+    		.getResultList().size() == 0) {
+    		getNativeQuery("UPDATE caisse_mouvement AS cm INNER JOIN user AS us ON cm.livreur_id = us.employe_id "+
+					"SET cm.livreurU_id = us.id "+
+					"WHERE  cm.livreur_id is not null")
+    			.executeUpdate();
+    	}
+    }
+	 
+	@Override
+	public List<UserPersistant> getListUserActifsByProfile(String profileCode){
+		return getQuery("select us from UserPersistant us "
+				+ "left join us.opc_profile2 profile2 "
+				+ "left join us.opc_profile3 profile3 "
+				+ "where (us.is_desactive is null or us.is_desactive=0) "
+				+ "and ("
+					+ "us.opc_profile.code=:codeProfile "
+					+ "OR profile2.code=:codeProfile "
+					+ "OR profile3.code=:codeProfile) "
+				+ "order by us.login") 
+				.setParameter("codeProfile", profileCode)
+				.getResultList();
+	}
+	
+	@Override
+	@Transactional
+	@WorkModelMethodValidator
+	public void activerDesactiverElement(Long userId) {
+		UserPersistant userPersistant = userDao.findById(userId);
+		userPersistant.setIs_desactive(BooleanUtil.isTrue(userPersistant.getIs_desactive()) ? false : true);
+		//
+		getEntityManager().merge(userPersistant);
+	}
+
+	@Override
+	@Transactional
+	public void changerPw(String old, String newpw, String confirmpw) { 
+		EncryptionEtsUtil encryptionEtsUtil = new EncryptionEtsUtil(EncryptionEtsUtil.getDecrypKey());
+		if(!old.equals(encryptionEtsUtil.decrypt(ContextAppli.getUserBean().getPassword()))){
+			MessageService.addFieldMessage("old_pw", "Le mot de passe est erroné.");
+			return;
+		} else if(!newpw.equals(confirmpw)){
+			MessageService.addFieldMessage("new_pw", "Les deux nouveaux mots de passe sont différents.");
+			return;
+		}
+		
+		UserBean userp = findById(ContextAppli.getUserBean().getId());
+		userp.setPassword(encryptionEtsUtil.encrypt(newpw));
+		update(userp);
+		
+		MessageService.getGlobalMap().put(ProjectConstante.SESSION_GLOBAL_USER, userp);
+		
+		MessageService.addBannerMessage(MSG_TYPE.SUCCES, "Le mot de passe est mise à jour avec succès.");
+	}
+
+	@Override
+	public UserBean getUserByBadge(String badge) {
+		UserPersistant userPersistant = userDao.getUserByBadge(badge);
+
+		return (UserBean) ServiceUtil.persistantToBean(UserBean.class, userPersistant);
+	}
+
+	@Override
+	public List<UserPersistant> findAllUser(boolean actifOnly) {
+		return getQuery("from UserPersistant where  "
+				+ "(opc_profile.is_desactive is null or opc_profile.is_desactive=0) "
+				+ (actifOnly ? "and  (is_desactive is null or is_desactive=0) ":"")
+				+ "and login!='REMOTE_ADMIN' "
+				+ "order by login")
+				.getResultList();
+	}
+
+	@Override
+	@Transactional
+	public void updateEcheanceRestaurant(Date dateEcheance) {
+		EncryptionEtsUtil encryptionUtil = new EncryptionEtsUtil(EncryptionEtsUtil.getDecrypKey()); 
+		
+		IUserService userService = ServiceUtil.getBusinessBean(IUserService.class);
+	    
+    	EtablissementPersistant etablissement = null;
+ 		if(ReplicationGenerationEventListener._IS_CLOUD_SYNCHRO_INSTANCE){
+ 			Long etsId = ContextAppli.getEtablissementBean().getId();
+ 			etablissement = userService.getEntityManager().find(EtablissementPersistant.class, etsId);
+ 		} else{
+ 			etablissement = userService.findAll(EtablissementPersistant.class).get(0);
+ 	    	etablissement = userService.findById(EtablissementPersistant.class, etablissement.getId());	
+ 		}
+ 		
+ 		etablissement.setTarget_end(encryptionUtil.encrypt(DateUtil.dateToString(dateEcheance, "ddMMyyyy")));
+		//
+		getEntityManager().merge(etablissement);
+		getEntityManager().flush();
+	}
+
+	@Override
+	@Transactional
+	public void updateLastCheckCloud(Long etsId) {
+		EtablissementPersistant restauP = userDao.findById(EtablissementPersistant.class, etsId);
+		restauP.setDate_synchro(new Date());
+		//
+		getEntityManager().merge(restauP);
+		getEntityManager().flush();
+	}
+	
+	@Override
+	@Transactional
+	public boolean checkCodeAbonnement(String codeAbonnement) {
+		
+		String key = StrimUtil.getGlobalConfigPropertie("client.key");
+		
+		EncryptionEtsUtil encryptionUtil = new EncryptionEtsUtil(key); 
+		String code = encryptionUtil.decrypt(codeAbonnement);
+		
+		String[] data = StringUtil.getArrayFromStringDelim(code, "|");
+		if(data == null || data.length < 3){
+			return false;
+		}
+		
+		Date currDate = DateUtil.stringToDate(new SimpleDateFormat("dd/MM/yyyy").format(new Date()));
+		
+		if(!DateUtil.isDate(data[0])){
+			return false;
+		} else if(DateUtil.stringToDate(data[0], "dd/MM/yyyy").compareTo(currDate) != 0){
+			return false;
+		}
+		
+		EtablissementPersistant etsP = (EtablissementPersistant) findAll(EtablissementPersistant.class).get(0);
+		etsP = (EtablissementPersistant) findById(EtablissementPersistant.class, etsP.getId());
+		
+		if(!etsP.getCode_authentification().equals(data[1])){
+			return false;
+		}
+		
+		boolean isDesAbonnement = "ABON_DOWN".equals(data[2]);
+		boolean isReAbonnement = "ABON_UP".equals(data[2]);
+		
+		if(!DateUtil.isDate(data[2], "ddMMyyyy")){
+			if(isDesAbonnement){
+				// Désabonner l'application
+				etsP.setFlag_maj(encryptionUtil.encrypt("ABON_DOWN"));
+			} else if(isReAbonnement){
+				etsP.setFlag_maj(encryptionUtil.encrypt("ABON_UP"));
+			} else{
+				return false;
+			}
+		} else if(DateUtil.stringToDate(data[2], "ddMMyyyy").compareTo(currDate) <= 0){
+			return false;
+		}
+		
+		etsP.setDate_synchro(new Date());
+		if(!isDesAbonnement && !isReAbonnement){
+			etsP.setTarget_end((encryptionUtil.encrypt(data[2])));
+		}
+		getEntityManager().merge(etsP);
+		
+		return true;
+	}
+
+	@Override
+	@Transactional
+	public void updateFlagUpdate(String version, Date dateVersion) {
+		EtablissementPersistant etsP = (EtablissementPersistant)userDao.findAll(EtablissementPersistant.class).get(0);
+		etsP.setIs_script_torun(true);
+		etsP.setVersion_soft(version);
+		etsP.setDate_soft(dateVersion);
+		//
+		EntityManager em = getEntityManager();
+		
+		em.merge(etsP);
+		em.flush();
+	}
+
+	@Override
+	@Transactional
+	public void updateAboonement(String retourAbonnement) {
+		if(StringUtil.isEmpty(retourAbonnement)){
+			return;
+		}
+		EtablissementPersistant etsP = (EtablissementPersistant)userDao.findAll(EtablissementPersistant.class).get(0);
+		etsP.setAbonnement(retourAbonnement);
+		
+		EntityManager em = getEntityManager();
+		em.merge(etsP);
+		em.flush();
+	}
+
+	@Override
+	public JourneePersistant getLastJourne() {
+		List<JourneePersistant> listJournee = getQuery("from JourneePersistant journee order by date_journee desc").getResultList();
+		return (listJournee.size() > 0 ? listJournee.get(0) : null);
+	}
+	
+	@Override
+	public CaisseJourneePersistant getJourneCaisseOuverte(Long caisseId) {
+		CaisseJourneePersistant caisseJourneeP = (CaisseJourneePersistant) getSingleResult(getQuery("from CaisseJourneePersistant where "
+						+ "opc_journee.statut_journee=:statut and opc_caisse.id=:caisseId and statut_caisse=:statut")
+				.setParameter("statut", ContextAppli.STATUT_JOURNEE.OUVERTE.getStatut().toString())
+				.setParameter("caisseId", caisseId));
+		return caisseJourneeP;
+	}
+	
+	@Override
+	public List<CaissePersistant> getListAfficheurs(Long caisseId) {
+		return getQuery("from CaissePersistant where opc_caisse.id is not null and opc_caisse.id=:caisseId")
+				.setParameter("caisseId", caisseId)
+				.getResultList();
+	}
+
+	@Override
+	public List<NotificationPersistant> getListNotification(UserBean userBean) {
+		return getQuery("from NotificationPersistant where type_notif in ('NEWS', 'ALERT') and (user_read is null or user_read not like :userId)")
+			.setParameter("userId", "%;"+userBean.getId()+";%")
+			.getResultList();
+	}
+	@Override
+	@Transactional
+	public void updateNotification(Long userId, Long notifId) {
+		NotificationPersistant notifP = findById(NotificationPersistant.class, notifId);
+		notifP.setUser_read(StringUtil.getValueOrEmpty(notifP.getUser_read())+";"+userId+";");
+		//
+		getEntityManager().merge(notifP);
+	}
+
+	@Override
+	@Transactional
+	public void synchroniseNotifications(List<NotificationPersistant> listNotif) {
+		if(listNotif != null) {
+			EntityManager em = getEntityManager();
+			for (NotificationPersistant notificationP : listNotif) {
+				 if(getQuery("from NotificationPersistant where code=:code")
+						.setParameter("code", notificationP.getCode())
+						.getResultList().size() == 0) {
+					 NotificationPersistant newNotifi = (NotificationPersistant) ReflectUtil.cloneBean(notificationP);
+					 newNotifi.setId(null);
+					 newNotifi.setDate_reception(new Date());
+					 //
+					 em.merge(newNotifi);
+				 }
+			}
+		}
+	}
+
+	@Override
+	public UserPersistant getUserByLogin(String login) {
+		List<UserPersistant> listUser = getQuery("from UserPersistant user where UPPER(user.login)=:login")
+				.setParameter("login", login.toUpperCase())
+				.getResultList();
+		
+		return (listUser.size() > 0 ? listUser.get(0) : null);
+	}
+
+
+	@Override
+	public List<LivreurPositionPersistant> getPositionsLivreur(Long livreurId, Date dateDebut, Date dateFin) {
+		String req = "from LivreurPositionPersistant where "
+				+ "opc_livreur.id = :livreurId "
+				+ "and date_position >= :dateDebut ";
+		
+		if(dateFin != null){
+			req += "and date_position <= :dateFin ";
+		}
+		
+		req += " order by date_position asc";
+		
+		Query query = getQuery(req)
+				.setParameter("livreurId", livreurId)
+				.setParameter("dateDebut", dateDebut);
+		
+		if(dateFin != null){
+			query.setParameter("dateFin", dateFin);
+		}
+		
+		List<LivreurPositionPersistant> listPos = query.getResultList();
+		
+		return listPos;
+	}
+
+	@Override
+	@Transactional
+	public void unlockCommandes(Long cmdId, Long userId) {
+		EntityManager em = getEntityManager();
+		List<CaisseMouvementPersistant> listCmd = null;
+		if(cmdId != null) {
+			listCmd = getQuery("from CaisseMouvementPersistant "
+				+ "where opc_user_lock.id=:userId and id=:cmdId")
+			.setParameter("userId", userId)
+			.setParameter("cmdId", cmdId)
+			.getResultList();
+		} else {
+			listCmd = getQuery("from CaisseMouvementPersistant "
+					+ "where opc_user_lock.id=:userId")
+				.setParameter("userId", userId)
+				.getResultList();
+		}
+		
+		for (CaisseMouvementPersistant caisseMouvementP : listCmd) {
+			caisseMouvementP.setOpc_user_lock(null);
+			em.merge(caisseMouvementP);
+		}
+	}
+	
+//	@Override
+//	public List<UserPersistant> getListUserActifsByPoste(String postCode){
+//		return getQuery("from UserPersistant us where (us.is_desactive is null or us.is_desactive=0) "
+//				+ "and us.opc_employe.opc_poste.code=:codePoste "
+//				+ "order by us.login") 
+//				.setParameter("codePoste", postCode)
+//				.getResultList();
+//	}
+}

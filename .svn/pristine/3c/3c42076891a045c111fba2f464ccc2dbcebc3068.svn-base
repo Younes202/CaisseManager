@@ -1,0 +1,115 @@
+<%@page import="appli.model.domaine.administration.persistant.AgencementPersistant"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="java.util.Collections"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="java.util.List"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<script type="text/javascript">
+$(document).ready(function (){
+    $("#target_tbl").select2({
+        allowClear: true
+    });
+});
+function setClientsIdx(){
+	if($("#target_tbl").val() == ''){
+		return;
+	}
+	showSpinner();
+    //
+    $.ajax({
+        beforeSend: function(data) {
+        },
+        url: "front?w_f_act=<%=EncryptionUtil.encrypt("caisse-web.caisseWeb.getClientsTable")%>&curr_tab="+$("#target_tbl").val()+"&wpaj=true&wfaj=true&skipI=true&skipP=true",
+        data: null,
+        type: "POST",
+        cache: false,
+        dataType: 'text',
+        error: function(data) {
+        	hideSpinner();
+        },
+        success: function(data) {
+        	 hideSpinner();
+        	 
+        	 $('#target_client')
+        	    .find('option')
+        	    .remove()
+        	    .end()
+        	    .append(data).trigger("change");
+        }
+    });
+	
+}
+</script>
+
+<%
+List<AgencementPersistant> listAgencement = (List<AgencementPersistant>)request.getAttribute("listAgencement");
+String refTabeTraget = (String) ControllerUtil.getUserAttribute("CURRENT_TABLE_REF", request);
+%>
+<std:form name="data-form">
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">Transfert de ** <span style="color: blue;font-weight: bold;">${currArt }</span> ** vers un client</span>
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			<div class="row">
+				<%if(listAgencement.size() > 0){ %>
+					<div class="form-group">
+						<std:label classStyle="control-label col-md-3" value="Table destination" />
+						<div class="col-md-9">
+							<select id="target_tbl" name="target_tbl" style="width:80%;" onchange="setClientsIdx();">
+								<option></option>
+								<% 
+									for(AgencementPersistant agencement : listAgencement){%>
+										<optgroup label="<%=agencement.getEmplacement()%>"></optgroup>
+									<%
+										String[] data = StringUtil.getArrayFromStringDelim(agencement.getTable_coords(), ";");
+										if(data != null){
+											List<String> list = new ArrayList<>();
+											for(String tbl : data){
+												String[] datatab = StringUtil.getArrayFromStringDelim(tbl, ":");
+												list.add(datatab[0]);
+											}
+											Collections.sort(list);
+											
+											for(String tab : list){
+												String selected = (tab.equals(refTabeTraget) ? " selected='selected'" : "");
+											%>
+												<option <%=selected %> value="<%=tab%>">&nbsp;&nbsp;&nbsp;&nbsp;<%=tab %></option>
+											<%}
+										}
+									}
+								%>
+							</select>
+						</div>
+					</div>
+				<%} %>
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Client destination" />
+					<div class="col-md-9">
+						<std:select name="target_client" required="true" forceWriten="true" type="string" width="80%" data="${clientIdxArray }" addBlank="false" />
+					</div>
+				</div>
+				<div class="row" style="text-align: center;">
+					<div class="col-md-12">
+						<std:button actionGroup="C" style="border-radius: 37px;height: 52px;font-size: 21px;" classStyle="btn btn-success" targetDiv="left-div" action="caisse-web.caisseWeb.transfertArtMnu" icon="fa-mail-forward" value="Transf&eacute;rer" />
+						<button type="button" id="close_modal" style="border-radius: 37px;height: 52px;font-size: 21px;" class="btn btn-primary" data-dismiss="modal">
+							<i class="fa fa-times"></i> Fermer
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</std:form>

@@ -1,0 +1,14 @@
+Démarrage traitement ...
+urlCloudBase : http://localhost:8089/caisse-manager-origine/printCtrl
+IP ...192.168.1.100---Port : 4444
+Unable to connect the device,ErrorCode=-7
+Ajout ==> 000001---ABDELLATIF---------True
+Ajout ==> 000002---ABD ALLAH---------True
+Ajout ==> 000003---LARBE-----larbe----True
+Ajout ==> 000004---HICHAM---------True
+Ajout ==> 000005---ADMIN---------True
+Please connect the device first
+La référence d'objet n'est pas définie à une instance d'un objet.
+Please connect the device first
+Deconnexion
+Fin traitement

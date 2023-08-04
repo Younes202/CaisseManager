@@ -1,0 +1,121 @@
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@ taglib uri="http://www.customtaglib.com/fn" prefix="fn"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<style>
+#generic_modal_body{
+	width: 620px;
+	margin-left: -10%;
+}
+</style> 
+
+<c:set var="exeId" value="<%=(ContextGloabalAppli.getExerciceBean()!=null?ContextGloabalAppli.getExerciceBean().getId():null) %>" />
+
+<std:form name="data-form">
+	<!-- widget grid -->
+	<div class="widget">
+		<div class="widget-header bordered-bottom bordered-blue">
+			<span class="widget-caption">Fiche compte</span>
+			<std:link actionGroup="U" targetDiv="generic_modal_body" classStyle="btn btn-default" action="compta.compte.work_init_update" workId="${compte.id}" icon="fa fa-pencil" tooltip="Cr&eacute;er" />
+		</div>
+		<div class="widget-body">
+			<div class="row">
+				<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+			</div>
+			
+			<input type="hidden" name="fam_worksys" value="${fam }">
+			<div class="row">
+				<std:label classStyle="control-label col-md-3" value="Parent" />
+				<div class="col-md-9" style="margin-left: -12px;margin-bottom: 18px;">
+					<std:select name="compte.parent_id" type="long" key="id" labels="code;'-';libelle" data="${listCompte}" disable="true" required="true" isTree="true" width="100%" value="${parent_compte }"/>
+				</div>
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Code" />
+					<div class="col-md-2">
+						<std:text name="compte.code" size="10" type="string"  required="true" maxlength="7" />
+					</div>
+				</div>
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Libell&eacute;" />
+					<div class="col-md-9">
+						<std:text name="compte.libelle" size="60" type="string"  required="true" maxlength="150" />
+					</div>
+				</div>
+			</div>	
+			<div class="row">
+				<c:set var="tauxRecup" value="${compte.getTauxRecuperation(exeId) }" />
+				
+				<c:choose>
+					<c:when test="${
+							   fn:startsWith(compte.code, '604') 
+							or fn:startsWith(compte.code, '605') 
+							or fn:startsWith(compte.code, '606')
+							or fn:startsWith(compte.code, '614')
+							or fn:startsWith(compte.code, '615')
+							or fn:startsWith(compte.code, '616')
+							or fn:startsWith(compte.code, '634')
+							or fn:startsWith(compte.code, '641')
+							or fn:startsWith(compte.code, '642')
+							or fn:startsWith(compte.code, '644')
+							or fn:startsWith(compte.code, '643')
+							or fn:startsWith(compte.code, '678') 
+						}">
+						
+						<div class="form-group">
+							<std:label classStyle="control-label col-md-3" value="Taux de r&eacute;cup&eacute;ration" />
+							<div class="col-md-9">
+								<std:text name="compte.taux_recuperation" size="6" type="decimal" maxlength="7" /> %
+							</div>
+						</div>
+				</c:when>
+				<c:when test="${not empty tauxRecup }">
+						<div class="form-group">
+							<std:label classStyle="control-label col-md-3" value="Taux de r&eacute;cup&eacute;ration" /> 
+							<div class="col-md-9">
+								${tauxRecup }
+						    	<std:hidden name="compte.taux_recuperation" basic="true" value="${tauxRecup }" />
+							</div>
+						</div>
+				</c:when>
+			</c:choose>
+				<%-- Op&eacute;ration courantes --%>
+				<c:if test="${
+						fn:startsWith(compte.code, '713') 
+						or fn:startsWith(compte.code, '714') 
+						or fn:startsWith(compte.code, '716')
+						}">
+						
+						<c:set var="isOprCourante" value="${compte.getIsOprCouranteInfo(exeId) }" />
+						
+						<div class="form-group">
+							<std:label classStyle="control-label col-md-3" value="Op&eacute;ration courante" />
+							<div class="col-md-9">
+								 <std:checkbox name="compte.is_opr_courante" value="${isOprCourante }" />
+							</div>
+						</div>
+				</c:if>	
+				<div class="form-group">
+					<std:label classStyle="control-label col-md-3" value="Commentaire" />
+					<div class="col-md-9">
+						<std:textarea name="compte.commentaire" maxlength="255" rows="5" cols="60"></std:textarea>
+					</div>
+				</div>
+			</div>	
+				<div class="row" style="text-align: center;">
+					<div class="col-md-12">
+						<std:button actionGroup="M" classStyle="btn btn-success" action="compta.compte.work_merge" workId="${compte.id }" icon="fa-save" value="Sauvegarder" />
+						<std:button actionGroup="D" classStyle="btn btn-danger" action="compta.compte.work_delete" workId="${compte.id }" icon="fa-trash-o" value="Supprimer" />
+						<button type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal">
+							<i class="fa fa-times"></i> Fermer
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</std:form>

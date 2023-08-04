@@ -1,0 +1,662 @@
+<%@page import="java.util.Date"%>
+<%@page import="appli.model.domaine.caisse.persistant.JourneeVenteErpView"%>
+<%@page import="java.util.HashMap"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="framework.model.common.util.DateUtil"%>
+<%@page import="java.math.BigDecimal"%>
+<%@page import="java.util.List"%>
+<%@page import="java.util.Map"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@ taglib uri="http://www.customtaglib.com/fmt" prefix="fmt"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+
+<%@page errorPage="/error.jsp"%>
+
+<%
+	Map<String,Object> variables = (Map<String,Object>)request.getAttribute("dataIndicateur");
+if(variables == null){
+	variables = new HashMap();
+}
+String devise = StrimUtil.getGlobalConfigPropertie("devise.symbole");
+
+List<JourneeVenteErpView> listVenteJours = (List<JourneeVenteErpView>)variables.get("venteParJours");
+listVenteJours = (listVenteJours == null) ? new ArrayList() : listVenteJours;
+
+List<Object[]> listVentes = (List<Object[]>)variables.get("ventes");
+listVentes = (listVentes == null) ? new ArrayList() : listVentes;
+
+List<Object[]> listAchates = (List<Object[]>)variables.get("achates");
+listAchates = (listAchates == null) ? new ArrayList() : listAchates;
+
+List<Object[]> listDepences = (List<Object[]>)variables.get("depences");
+listDepences = (listDepences == null) ? new ArrayList() : listDepences;
+
+List<Object[]> listRecetes = (List<Object[]>)variables.get("recetes");
+listRecetes = (listRecetes == null) ? new ArrayList() : listRecetes;
+
+List<Object[]> listAchatesPie = (List<Object[]>)variables.get("achatesPie");
+listAchatesPie = (listAchatesPie == null) ? new ArrayList() : listAchatesPie;
+
+List<Object[]> mttResultatNetParMois = (List<Object[]>)variables.get("mttResultatNetParMois");
+mttResultatNetParMois = (mttResultatNetParMois == null) ? new ArrayList() : mttResultatNetParMois;
+%>
+
+<style>
+	#scroll_list_article_alert{
+		max-height: 290px;
+	}
+
+.morris-hover {
+	position: absolute;
+	z-index: 1000
+}
+
+.morris-hover.morris-default-style {
+	border-radius: 10px;
+	padding: 6px;
+	color: #666;
+	background: rgba(255, 255, 255, 0.8);
+	border: solid 2px rgba(230, 230, 230, 0.8);
+	font-family: sans-serif;
+	font-size: 12px;
+	text-align: center
+}
+
+.morris-hover.morris-default-style .morris-hover-row-label {
+	font-weight: bold;
+	margin: 0.25em 0
+}
+
+.morris-hover.morris-default-style .morris-hover-point {
+	white-space: nowrap;
+	margin: 0.1em 0
+}
+</style>
+
+
+<!-- Page Breadcrumb -->
+<div class="page-breadcrumbs breadcrumbs-fixed">
+	<ul class="breadcrumb">
+		<li><i class="fa fa-home"></i> <a href="#">Accueil</a></li>
+		<li class="active">Tableau de bord</li>
+	</ul>
+</div>
+<!-- /Page Breadcrumb -->
+<!-- Page Header -->
+<div class="page-header position-relative">
+	<div class="header-title">
+	</div>
+	<!--Header Buttons-->
+	<jsp:include page="/WEB-INF/fragment/shortcut.jsp"></jsp:include>
+	<!--Header Buttons End-->
+</div>
+<!-- /Page Header -->
+<!-- Page Body -->
+<div class="page-body">
+	<std:form name="search-form">
+		<!-- ******************************* the Flash Info chart row ******************************* -->
+		<div class="row">
+			<div class="col-lg-12 col-sm-6 col-xs-12">
+				<div class="widget-main ">
+					<div class="tabbable">
+						<%
+						request.setAttribute("tab", "indic");
+					%>
+						<jsp:include page="/domaine/dashboard_erp/tabs_header.jsp" />
+						<div class="tab-content">
+							<!-- *******************************  Evolution des ventes sur 30 jours ******************************* -->
+							<div class="row">
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption">Evolution des ventes sur 30 jours</span>
+										</div>
+										<div class="widget-body" style="height: 525px;">
+											<div id="area-chart-Ventes" class="chart chart-lg" style="height: 400px;"></div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption">R&eacute;partition des ventes </span>
+										</div>
+										<div class="widget-body">
+											<div class="row">
+												<div class="col-lg-2 col-md-2">
+													<span style="float: left; margin-top: 5px;">D&eacute;but &nbsp;</span>
+												</div>
+												<div class="col-lg-4 col-md-4">
+													<std:date name="rep_dt_debut" value="${curr_dtDebut }" />
+												</div>
+												<div class="col-lg-2 col-md-2">
+													<span style="float: left; margin-top: 5px;">Fin &nbsp;</span>
+												</div>
+												<div class="col-lg-4 col-md-4">
+													<std:date name="rep_dt_fin" value="${curr_dtFin }" />
+												</div>
+											</div>
+											<div class="row" style="border-bottom: 1px solid gray; height: 50px; margin-top: 7px;">
+												<div class="col-lg-2 col-md-2">
+													<span style="float: left; margin-top: 5px;">Type &nbsp;</span>
+												</div>
+												<div class="col-lg-9 col-md-9">
+													<std:select type="string" name="curr_famille" data="${list_famille }" key="id" labels="libelle" width="100%;" value="${curr_famille }" isTree="true" />
+												</div>
+												<div class="col-lg-1 col-md-1">
+													<a href="javascript:" wact="<%=EncryptionUtil.encrypt("dash.dashBoard.init_indicateur_repartition")%>" targetDiv="repartition_div" style="margin-top: 4px; position: absolute; left: 0px;"> <img src="resources/framework/img/refresh.png" />
+													</a>
+												</div>
+											</div>
+											<div class="row" id="repartition_div">
+										</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!--     **************************  R&eacute;partion des achats && taux de ventes par articles  ************************ -->
+							<div class="horizontal-space"></div>
+							<div class="row">
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> R&eacute;sultat net sur 12 mois </span>
+										</div>
+										<div class="widget-body">
+											<div id="line-chart" class="chart chart-lg"></div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> Evolution des ventes sur 12 mois</span>
+										</div>
+										<div class="widget-body">
+											<div id="area-chart-ventes" class="chart chart-lg"></div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> Evolution des ventes sur 12 mois</span>
+										</div>
+										<div class="widget-body">
+											<div id="area-chart-ahates" class="chart chart-lg"></div>
+										</div>
+									</div>
+								</div>
+
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> Evolution des ventes sur 12 mois</span>
+										</div>
+										<div class="widget-body">
+											<div id="area-chart-depences" class="chart chart-lg"></div>
+										</div>
+									</div>
+								</div>
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> Evolution des ventes sur 12 mois</span>
+										</div>
+										<div class="widget-body">
+											<div id="area-chart-recetes" class="chart chart-lg"></div>
+										</div>
+									</div>
+								</div>
+
+								<div class="col-lg-6 col-md-12 col-sm-12 col-xs-12">
+									<div class="widget">
+										<div class="widget-header ">
+											<span class="widget-caption"> Evolution</span>
+										</div>
+										<div class="widget-body">
+											<div id="area-chart-recetes" class="chart chart-lg">
+												<div class="col-sm-3">
+													<div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+														<span style="width: 250px; margin-left: 0Px; margin-top: -7px;">De &nbsp;</span>
+														<std:date name="empl_dt_debut" value="${curr_empl_dtDebut }" />
+													</div>
+												</div>
+
+												<div class="col-sm-3">
+													<div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+														<span style="width: 250px; margin-left: 0Px; margin-top: -7px;">A &nbsp &nbsp;</span>
+														<std:date name="empl_dt_fin" value="${curr_empl_dtFin }" />
+													</div>
+
+												</div>
+
+												<div class="col-sm-3">
+													<a href="javascript:" wact="<%=EncryptionUtil.encrypt("dash.dashboard2.init_data_")%>" targetDiv="dash_CMP" style="margin-top: 22PX; FLOAT: LEFT;"> <img src="resources/framework/img/refresh.png" />
+													</a>
+												</div>
+
+
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+									<div class="well with-header" style="height: 575px;">
+										<div class="header bordered-darkorange">fidèlité de donnes par utlisateurs</div>
+										<div style="height: 510px;">
+											<div class="databox databox-xxlg databox-vertical databox-shadowed bg-white radius-bordered padding-5" style="height: 510px;" id=area-chart-Achates></div>
+										</div>
+									</div>
+								</div>
+
+								<div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+									<div class="well with-header" style="height: 575px;">
+										<div class="header bordered-darkorange">Réduction par utlisateurs</div>
+										<div style="height: 510px;">
+											<div class="databox databox-xxlg databox-vertical databox-shadowed bg-white radius-bordered padding-5" style="height: 510px;" id="area-chart-Depences"></div>
+										</div>
+									</div>
+								</div>
+								
+								<div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+									<div class="well with-header" style="height: 575px;">
+										<div class="header bordered-darkorange">Réduction par utlisateurs</div>
+										<div style="height: 510px;">
+											<div class="databox databox-xxlg databox-vertical databox-shadowed bg-white radius-bordered padding-5" style="height: 510px;" id="area-chart-Recetes"></div>
+										</div>
+									</div>
+								</div>
+
+
+
+
+
+
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</std:form>
+</div>
+<!-- /Page Body -->
+
+<!--Page Related Scripts-->
+<!--Flot Charts Needed Scripts-->
+<script src="resources/framework/js/charts/flot/jquery.flot.js"></script>
+<script src="resources/framework/js/charts/flot/jquery.flot.resize.js"></script>
+<script src="resources/framework/js/charts/flot/jquery.flot.pie.js"></script>
+<script src="resources/framework/js/charts/flot/jquery.flot.tooltip.js"></script>
+<script src="resources/framework/js/charts/flot/jquery.flot.orderBars.js"></script>
+<!--    ADDED BY MEEE -->
+
+<script>
+        $(window).ready(function () {
+            //Sets The Hidden Chart Width
+            $('#dashboard-bandwidth-chart')
+                .data('width', $('.box-tabbs')
+                    .width() - 20);
+			$(".databox-cell cell-4 no-padding text-align-center bordered-right bordered-platinum").css("background-color",themefifthcolor);
+
+
+
+			var chartDomVentes = document.getElementById('area-chart-Ventes');
+			var myChartVentes = echarts.init(chartDomVentes);
+			var optionVentes;
+
+			let date = [];
+			let data = [];
+			 <%for(Object[] journeeV : listVentes){
+				 Date dtJ = (Date)journeeV[1];
+			 %>
+			  var now = new Date(<%=dtJ.getTime()%>);
+			  date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+			  data.push(<%=journeeV[0]%>);
+			  <%}%>
+			}
+			optionVentes = {
+			  tooltip: {
+			    trigger: 'axis',
+			    position: function (pt) {
+			      return [pt[0], '10%'];
+			    }
+			  },
+			  title: {
+			    left: 'center',
+			    text: 'Large Area Chart'
+			  },
+			  toolbox: {
+			    feature: {
+			      dataZoom: {
+			        yAxisIndex: 'none'
+			      },
+			      restore: {},
+			      saveAsImage: {}
+			    }
+			  },
+			  xAxis: {
+			    type: 'category',
+			    boundaryGap: false,
+			    data: date
+			  },
+			  yAxis: {
+			    type: 'value',
+			    boundaryGap: [0, '100%']
+			  },
+			  dataZoom: [
+			    {
+			      type: 'inside',
+			      start: 0,
+			      end: 10
+			    },
+			    {
+			      start: 0,
+			      end: 10
+			    }
+			  ],
+			  series: [
+			    {
+			      name: 'Fake Data',
+			      type: 'line',
+			      symbol: 'none',
+			      sampling: 'lttb',
+			      itemStyle: {
+			        color: 'rgb(255, 70, 131)'
+			      },
+			      areaStyle: {
+			        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+			          {
+			            offset: 0,
+			            color: 'rgb(255, 158, 68)'
+			          },
+			          {
+			            offset: 1,
+			            color: 'rgb(255, 70, 131)'
+			          }
+			        ])
+			      },
+			      data: data
+			    }
+			  ]
+			};
+
+			
+			var chartDomAchates = document.getElementById('area-chart-ahates');
+			var myChartAchates = echarts.init(chartDomAchates);
+			var optionAchates;
+
+			let dateAchates = [];
+			let dataAchates = [];
+			 <%for(Object[] journeeV : listAchates){
+				 Date dtJ = (Date)journeeV[1];
+			 %>
+			  var now = new Date(<%=dtJ.getTime()%>);
+			  dateAchates.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+			  dataAchates.push(<%=journeeV[0]%>);
+			  <%}%>
+			optionAchates = {
+			  tooltip: {
+			    trigger: 'axis',
+			    position: function (pt) {
+			      return [pt[0], '10%'];
+			    }
+			  },
+			  title: {
+			    left: 'center',
+			    text: 'Large Area Chart'
+			  },
+			  toolbox: {
+			    feature: {
+			      dataZoom: {
+			        yAxisIndex: 'none'
+			      },
+			      restore: {},
+			      saveAsImage: {}
+			    }
+			  },
+			  xAxis: {
+			    type: 'category',
+			    boundaryGap: false,
+			    data: dateAchates
+			  },
+			  yAxis: {
+			    type: 'value',
+			    boundaryGap: [0, '100%']
+			  },
+			  dataZoom: [
+			    {
+			      type: 'inside',
+			      start: 0,
+			      end: 10
+			    },
+			    {
+			      start: 0,
+			      end: 10
+			    }
+			  ],
+			  series: [
+			    {
+			      name: 'Fake Data',
+			      type: 'line',
+			      symbol: 'none',
+			      sampling: 'lttb',
+			      itemStyle: {
+			        color: 'rgb(255, 70, 131)'
+			      },
+			      areaStyle: {
+			        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+			          {
+			            offset: 0,
+			            color: 'rgb(255, 158, 68)'
+			          },
+			          {
+			            offset: 1,
+			            color: 'rgb(255, 70, 131)'
+			          }
+			        ])
+			      },
+			      data: dataAchates
+			    }
+			  ]
+			};
+			
+			var chartDomDepences = document.getElementById('area-chart-depences');
+			var myChartDepences = echarts.init(chartDomDepences);
+			var optionDepences;
+
+			let dateDepences = [];
+			let dataDepences = [];
+			 <%for(Object[] journeeV : listDepences){
+		 		Date dtJ = (Date)journeeV[1];
+			 %>
+			  var now = new Date(<%=dtJ.getTime()%>);
+			  dateDepences.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+			  dataDepences.push(<%=journeeV[0]%>);
+			  <%}%>
+			}
+			optionDepences = {
+			  tooltip: {
+			    trigger: 'axis',
+			    position: function (pt) {
+			      return [pt[0], '10%'];
+			    }
+			  },
+			  title: {
+			    left: 'center',
+			    text: 'Large Area Chart'
+			  },
+			  toolbox: {
+			    feature: {
+			      dataZoom: {
+			        yAxisIndex: 'none'
+			      },
+			      restore: {},
+			      saveAsImage: {}
+			    }
+			  },
+			  xAxis: {
+			    type: 'category',
+			    boundaryGap: false,
+			    data: dateDepences
+			  },
+			  yAxis: {
+			    type: 'value',
+			    boundaryGap: [0, '100%']
+			  },
+			  dataZoom: [
+			    {
+			      type: 'inside',
+			      start: 0,
+			      end: 10
+			    },
+			    {
+			      start: 0,
+			      end: 10
+			    }
+			  ],
+			  series: [
+			    {
+			      name: 'Fake Data',
+			      type: 'line',
+			      symbol: 'none',
+			      sampling: 'lttb',
+			      itemStyle: {
+			        color: 'rgb(255, 70, 131)'
+			      },
+			      areaStyle: {
+			        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+			          {
+			            offset: 0,
+			            color: 'rgb(255, 158, 68)'
+			          },
+			          {
+			            offset: 1,
+			            color: 'rgb(255, 70, 131)'
+			          }
+			        ])
+			      },
+			      data: dataDepences
+			    }
+			  ]
+			};
+			
+			var chartDomRecetes = document.getElementById('area-chart-recetes');
+			var myChartDepences = echarts.init(chartDomRecetes);
+			var optionRecetes;
+
+			let dateRecetes = [];
+			let dataRecetes = [];
+			 <%for(Object[] journeeV : listRecetes){
+				 Date dtJ = (Date)journeeV[1];
+			 %>
+			  var now = new Date(<%=dtJ.getTime()%>);
+			  dateRecetes.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+			  dataRecetes.push(<%=journeeV[0]%>);
+			  <%}%>
+			}
+			optionRecetes = {
+			  tooltip: {
+			    trigger: 'axis',
+			    position: function (pt) {
+			      return [pt[0], '10%'];
+			    }
+			  },
+			  title: {
+			    left: 'center',
+			    text: 'Large Area Chart'
+			  },
+			  toolbox: {
+			    feature: {
+			      dataZoom: {
+			        yAxisIndex: 'none'
+			      },
+			      restore: {},
+			      saveAsImage: {}
+			    }
+			  },
+			  xAxis: {
+			    type: 'category',
+			    boundaryGap: false,
+			    data: dateRecetes
+			  },
+			  yAxis: {
+			    type: 'value',
+			    boundaryGap: [0, '100%']
+			  },
+			  dataZoom: [
+			    {
+			      type: 'inside',
+			      start: 0,
+			      end: 10
+			    },
+			    {
+			      start: 0,
+			      end: 10
+			    }
+			  ],
+			  series: [
+			    {
+			      name: 'Fake Data',
+			      type: 'line',
+			      symbol: 'none',
+			      sampling: 'lttb',
+			      itemStyle: {
+			        color: 'rgb(255, 70, 131)'
+			      },
+			      areaStyle: {
+			        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+			          {
+			            offset: 0,
+			            color: 'rgb(255, 158, 68)'
+			          },
+			          {
+			            offset: 1,
+			            color: 'rgb(255, 70, 131)'
+			          }
+			        ])
+			      },
+			      data: dataRecetes
+			    }
+			  ]
+			};
+			
+			
+			
+			optionVentes && myChartVentes.setOption(optionVentes);
+			optionAchates && myChartAchates.setOption(optionAchates);
+			optionDepences && myChartDepences.setOption(optionDepences);
+			optionRecetes && myChartRecetes.setOption(optionRecetes);
+
+
+
+
+			
+			
+			
+			
+			
+});
+        
+        $(window).ready(function () {
+         	  // Charger les donn�es
+            loadWidgetsAsynch();
+      	});
+              
+           function loadWidgetsAsynch(){
+            	var divLoading = "<div style='text-align:center;width:100%;height:100%;position:absolute;margin-top:30%;'><span style='color: #777;font-size: 12px;'>Chargement ...</span><img src='resources/<%=StrimUtil.getGlobalConfigPropertie("context.soft") %>/img/loading3.svg'></div>";
+           	$("#repartition_div").html(divLoading);
+           	
+           	submitAjaxForm('<%=EncryptionUtil.encrypt("dash.dashboard2.init_data_achates")%>', null, $("#search-form"), null, "repartition_div");
+      	}
+
+    </script>

@@ -1,0 +1,350 @@
+<%@page import="appli.model.domaine.vente.persistant.CaisseMouvementPersistant"%>
+<%@page import="appli.controller.domaine.caisse.ContextAppliCaisse"%>
+<%@page import="framework.controller.ContextGloabalAppli"%>
+<%@page import="appli.controller.domaine.util_erp.ContextAppli"%>
+<%@page import="framework.model.common.util.BooleanUtil"%>
+<%@page import="framework.controller.ControllerUtil"%>
+<%@page import="appli.model.domaine.fidelite.persistant.CarteFideliteClientPersistant"%>
+<%@page import="framework.model.common.util.EncryptionUtil"%>
+<%@page import="framework.model.common.util.StringUtil"%>
+<%@page import="framework.model.common.util.StrimUtil"%>
+<%@page import="framework.model.common.util.BigDecimalUtil"%>
+<%@page import="java.math.BigDecimal"%>
+<%@ taglib uri="http://www.customtaglib.com/complexe" prefix="cplx"%>
+<%@ taglib uri="http://www.customtaglib.com/standard" prefix="std"%>
+<%@ taglib uri="http://www.customtaglib.com/html" prefix="html"%>
+<%@ taglib uri="http://www.customtaglib.com/work" prefix="work"%>
+<%@ taglib uri="http://www.customtaglib.com/c" prefix="c"%>
+<%@page errorPage="/commun/error.jsp"%>
+
+<style>
+.label-paie{
+    font-size: 16px;
+    font-weight: bold;
+    color: gray;
+}
+.btn-calc-paie{
+	margin: 2px !important;
+	padding: 0px 0px !important;
+	width: 28px !important;
+ 	height: 28px !important;
+ 	font-size: 17px !important;
+ 	font-weight: bold !important;
+}
+.mode-paie{
+	font-size: 16px;
+    font-weight: bold;
+    height: 41px !important;
+    width: 167px !important;
+    border-radius: 7px !important;
+    margin-left: 15px;
+    padding-left: 4px;
+}
+
+.mode-paie img{
+	width: 24px !important;
+}
+.type-btn-paie{
+	height: 48px;
+    font-weight: bold;
+    font-size: 16px;
+    text-align: center;
+    text-transform: uppercase;
+    padding-top: 10px;
+ }
+.mtt-paie{
+   	font-size: 16px;
+   	font-weight: bold;
+   	color: blue;
+   }  
+   #table_paie tr{
+      line-height: 15px;
+   } 
+    #table_paie input{
+   	   border: 1px solid gray;
+   	}
+</style>
+
+<%
+boolean isCheque = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PAIE_CHEQUE"));
+boolean isDej = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PAIE_DEJ"));
+boolean isPoint = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PAIE_POINT"));
+boolean isPortefeuille = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PAIE_PORTEFEUILLE"));
+boolean isCarte = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("PAIE_CARTE"));
+boolean isShowModeCmd = true;//StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SHOW_MODE_CMD"));
+boolean isCostomCall = StringUtil.isTrue(ContextGloabalAppli.getGlobalConfig("SHOW_COSTOM_CALL"));
+
+CarteFideliteClientPersistant carteClientP = null;
+BigDecimal mttPointUtilisable = null;
+BigDecimal mttPortefeuilleUtilisable = null;
+//
+if(isPoint){
+	carteClientP = (CarteFideliteClientPersistant)request.getAttribute("carteClientP");
+	mttPointUtilisable = (BigDecimal)request.getAttribute("mttPointsUtilisable");
+}
+if(isPortefeuille){
+	mttPortefeuilleUtilisable = (BigDecimal)request.getAttribute("mttPortefeuilleUtilisable");
+}
+
+BigDecimal mttTotal = (BigDecimal)request.getAttribute("mtt_total");
+boolean isSoldeNegatif = request.getAttribute("isSoldeNegatif") != null;
+CaisseMouvementPersistant CURRENT_COMMANDE = (CaisseMouvementPersistant) ControllerUtil.getUserAttribute("CURRENT_COMMANDE", request);
+BigDecimal soldePortefeuille = (CURRENT_COMMANDE.getOpc_client() != null ? CURRENT_COMMANDE.getOpc_client().getSolde_portefeuille() : null);
+%>
+
+<script type="text/javascript">
+	var mttTotalCmd = <%=mttTotal%>;
+
+$(document).ready(function (){
+	$("#div-calc a").click(function(){
+		if($(this).attr("v") == 'E'){
+			$("#txt-calc").val('');
+		} else if($(this).attr("v") == 'B'){
+			$("#txt-calc").val($("#txt-calc").val().substring(0, $("#txt-calc").val().length-1));
+		} else{
+			$("#txt-calc").val($("#txt-calc").val()+$(this).attr("v"));
+		}
+	});
+
+<%BigDecimal fraisLivrason = BigDecimalUtil.get(ContextGloabalAppli.getGlobalConfig(ContextAppli.PARAM_APPLI_ENUM.FRAIS_LIVRAISON.toString()));
+boolean isFraisLivraison = !BigDecimalUtil.isZero(fraisLivrason);%>	
+
+
+<%if(CURRENT_COMMANDE != null && StringUtil.isNotEmpty(CURRENT_COMMANDE.getType_commande())){%>
+	manageTypeCmd($("#div-type a[v='<%=CURRENT_COMMANDE.getType_commande()%>']"));
+<%}%>
+
+
+	$("#div-type a").click(function(){
+		manageTypeCmd($(this));
+	});
+	
+	$("#div_mode_paie a").click(function(){
+		$("#div_mode_paie a").attr("class", "btn btn-primary btn-circle btn-lg mode-paie");
+		$(this).attr("class", "btn btn-warning btn-circle btn-lg mode-paie");
+	});
+	
+	$("#div-paie a").click(function(){
+		var val = $(this).attr("v");
+		
+		<%if(carteClientP != null){%>
+			if(val == "pt"){
+				$("#mtt_points").val(getValNumFormated(<%=mttPointUtilisable%>));
+				refreshMttArendre();
+				return;
+			} 
+		<%}%>
+		<%if(!BigDecimalUtil.isZero(mttPortefeuilleUtilisable)){%>
+		if(val == "pf"){
+			$("#mtt_portefeuille").val(getValNumFormated(<%=mttPortefeuilleUtilisable%>));
+			refreshMttArendre();
+			return;
+		} 
+		<%}%>
+	
+		var mttCalc = $("#txt-calc").val();
+		
+		var isCalc = (mttCalc && $.trim(mttCalc)!='');
+		
+		var mttDej = getValNum("mtt_dej");
+		var mttCarte = getValNum("mtt_carte");
+		var mttCheque = getValNum("mtt_cheque");
+		var mttEspeces = getValNum("mtt_especes");
+		var mttPoints = getValNum("mtt_points");
+		var mttPortefeuille = getValNum("mtt_portefeuille");
+		
+		var totalPaye = mttDej + mttCarte + mttCheque + mttEspeces + mttPoints + mttPortefeuille;
+		var mtt = isCalc ? mttCalc : (mttTotalCmd-totalPaye);
+		
+		if(!isCalc && mtt < 0){
+			mtt = 0;
+		}
+		
+		//
+		if(val == "de"){
+			var mttDet = mtt+(isCalc?'':mttDej);
+			$("#mtt_dej").val(getValNumFormated(mttDet));
+		} else if(val == "cb"){
+			var mttDet = mtt+(isCalc?'':mttCarte);
+			$("#mtt_carte").val(getValNumFormated(mttDet));
+		} else if(val == "ch"){
+			var mttDet = mtt+(isCalc?'':mttCheque);
+			$("#mtt_cheque").val(getValNumFormated(mttDet));
+		} else if(val == "es"){
+			var mttDet = mtt+(isCalc?'':mttEspeces);
+			$("#mtt_especes").val(getValNumFormated(mttDet));
+		} else{
+			var mttDet = val;
+			$("#mtt_especes").val(getValNumFormated(mttDet));
+		}
+		// Refresh a rendre
+		refreshMttArendre();
+	});
+	$("#div-detail-paie a").click(function(){
+		$(this).closest("tr").find("input").val("");
+		// Refresh a rendre
+		refreshMttArendre();
+	});
+});
+function refreshMttArendre(){
+	totalPaye = getValNum("mtt_dej")+getValNum("mtt_carte")+getValNum("mtt_cheque")+getValNum("mtt_especes")+getValNum("mtt_points")+getValNum("mtt_portefeuille");
+	if(totalPaye == 0){
+		$("#mtt_rendu").val('');
+	} else{
+		$("#mtt_rendu").val(getValNumFormated((mttTotalCmd-totalPaye)*-1));
+	}
+}
+function getValNum(elementId){
+	return $("#"+elementId).val() ? parseFloat($("#"+elementId).val()) : 0;
+}
+function getValNumFormated(val){
+	return (val && $.trim(val)!='') ? parseFloat(val).toFixed(2) : "0.00";
+}
+function manageTypeCmd(selectorTypeCmd){
+	$("#div-type a").attr("class", "btn btn-palegreen shiny type-btn-paie");
+	selectorTypeCmd.attr("class", "btn btn-warning shiny type-btn-paie");
+	//
+	$("#typeCmd").val(selectorTypeCmd.attr("v"));
+	
+	
+	if(selectorTypeCmd.attr("v") == 'L'){
+		<%-- Recalculer la livraison --%>
+		if(<%=isFraisLivraison%>){
+			if($("#fraisLiv").val() != "1"){
+				mttTotalCmd = mttTotalCmd + <%=fraisLivrason%>;
+				$("#span_total").text(getValNumFormated(mttTotalCmd));
+				refreshMttArendre();
+				$("#fraisLiv").val("1");
+			}
+		}
+		$('#custom_call').val('');
+	} else{
+		if(<%=isFraisLivraison%> && $("#fraisLiv").val()=="1"){
+			mttTotalCmd = mttTotalCmd - <%=fraisLivrason%>;
+			$("#span_total").text(getValNumFormated(mttTotalCmd));
+			refreshMttArendre();
+			$("#fraisLiv").val("");
+		}
+		$('#custom_call').val('<%=StringUtil.getValueOrEmpty(request.getAttribute("num_token"))%>');
+	}
+}
+</script>
+
+	<!-- Page Header -->
+	<std:form name="data-form">
+		<input type="hidden" id="typeCmd" name="typeCmd" value='<%=isShowModeCmd ? "":"P"%>'>
+		<input type="hidden" id="fraisLiv" name="fraisLiv">
+	     <div class="widget-header bordered-bottom bordered-blue" style="padding-bottom: 5px; padding-top: 5px; padding-right: 5px; ">
+            <span class="widget-caption">
+            <%
+            	if(CURRENT_COMMANDE != null && CURRENT_COMMANDE.getOpc_client() != null){
+            %>
+            	<span style="font-size: 15px;font-weight: bold;"><%=CURRENT_COMMANDE.getOpc_client().getNom()+" "+StringUtil.getValueOrEmpty(CURRENT_COMMANDE.getOpc_client().getPrenom())%></span>
+            	<%
+            		if(carteClientP != null){
+            	%>
+	            	| Fid&eacute;lit&eacute; : <span style="font-size: 12px;color:orange;font-weight: normal;"><%=BigDecimalUtil.formatNumberZero(carteClientP.getMtt_total())%> Dhs</span>
+            <%
+            	}
+                 if(!BigDecimalUtil.isZero(soldePortefeuille)){
+            %>
+            		| R&eacute;serve : <span style="font-size: 12px;color:orange;font-weight: normal;"><%=BigDecimalUtil.formatNumberZero(soldePortefeuille)%> Dhs</span>
+            <%
+            	}
+                        }
+            %>
+            </span>	
+			
+         	<button type="button" id="close_modal" class="btn btn-primary" data-dismiss="modal" style="margin-top: -3px;margin-right: -2px;">
+				<i class="fa fa-times"></i> Fermer
+			</button>            
+         </div>
+		<div class="row" style="margin-left: 0px;margin-right: 0px;">
+			<jsp:include page="/WEB-INF/commun/center/banner_message.jsp"></jsp:include>
+		</div>
+         <div class="widget-body">
+         	<div class="row" style="margin-left: 0px;margin-right: 0px;margin-top: -7px;text-align: center;">
+       	         <span id="span_total" style="font-size: 3em;font-weight: bold;color: black;"><%=BigDecimalUtil.formatNumber(mttTotal) %> 
+       				<span style="font-size: 0.5em">MAD</span>
+       			</span>
+       			<span id="span_total_new" style="width: 165px;height: 40px;font-size: 30px;font-weight: bold;text-align: right;color:fuchsia;display: none;">res</span>
+         		<hr>
+         	</div>
+         	<div class="row" style="margin-left: 0px;margin-right: 0px;">
+         		<!-- Type -->
+         		<h2>Type de commande :</h2>
+         		<div style="width: 100%;float: left;text-align: center;margin-bottom: 33px;" id="div-type">
+         		<%if(isShowModeCmd){
+         			if(!BooleanUtil.isTrue(ContextAppliCaisse.getCaisseBean().getIs_livraison())){ %>
+         				<a href="javascript:void(0);" class="btn btn-palegreen shiny type-btn-paie" v='P'>Sur place</a>
+         				<a href="javascript:void(0);" class="btn btn-palegreen shiny type-btn-paie" v='E'>A emporter</a>
+         			<%} %>	
+         			<a href="javascript:void(0);" class="btn btn-palegreen shiny type-btn-paie" v='L'>Livraison</a>
+         		<%} %>	
+         		</div>
+         		
+         		<!-- Mode paiement -->
+         		<div style="float: left;text-align: center;" id="div-paie">
+         			<hr style="margin-top: 7px;margin-bottom: 0px;">
+         			<h2 style="text-align: left;">Mode de paiement :</h2>
+         			<div class="row">
+         				<div class="col-lg-12 col-sm126 col-xs-12" id="div_mode_paie">
+		         			<a href="javascript:void(0);" class="btn btn-primary  btn-circle btn-lg mode-paie" v="es">
+								<img style="width: 40px;margin-top: -6px;" src="resources/caisse/img/caisse-web/coins.png" /> ESPECES
+							</a>
+		         			<a href="javascript:void(0);" onclick="$('#cb_div').toggle(1000);" class="btn btn-primary  btn-circle btn-lg mode-paie" v="cb">
+								<img src="resources/caisse/img/caisse-web/credit_card.png" /> CARTE
+							</a>
+		         			<%if(isPoint && carteClientP != null){ %>
+		         				<a href="javascript:void(0);" style="background-color: #c2e79a !important;" class="btn btn-primary  btn-circle btn-lg mode-paie" v="pt">         					
+		         					<img src="resources/caisse/img/caisse-web/v_card.png" />
+		         				</a>
+		         			<%} %>
+		         			<% if(isPortefeuille && (!BigDecimalUtil.isZero(mttPortefeuilleUtilisable) || isSoldeNegatif)){%>
+		         				<a href="javascript:void(0);" style="background-color: #c2e79a !important;" class="btn btn-primary btn-circle btn-lg mode-paie" v="pf">         					
+		         					<img src="resources/caisse/img/caisse-web/money_safe1.png" />
+		         				</a>
+		         			<%} %>
+		         		</div>
+		         	</div>
+		         	<div class="row" id="cb_div" style="    margin-top: 10px;
+    						text-align: left;
+    						margin-left: 0px;
+    						border: 1px solid #9c27b0;
+    						border-radius: 6px;
+    						padding: 7px;display: none;">
+    						
+    						<table>
+    							<tr style="line-height: 30px;">
+    								<td>
+				         				<std:label classStyle="control-label label-paie" value="Numéro" /> 
+				         			</td>
+				         			<td>
+										<std:text type="string" name="cb_num" maxlength="30" mask="9999-9999-9999-9999" forceWriten="true" style="height: 30px;" />
+									</td>
+								</tr>
+								<tr style="line-height: 30px;">
+									<td style="padding-right: 10px;">
+										<std:label classStyle="control-label label-paie" value="Date validité" /> 
+									</td>
+									<td>	
+										<std:date name="cb_date" style="height: 30px;" forceWriten="true" />
+									</td>
+								</tr>
+								<tr style="line-height: 30px;">
+									<td>	
+										<std:label classStyle="control-label label-paie" value="Code" /> 
+									</td>
+									<td>	
+										<std:text type="string" name="cb_code" maxlength="3" mask="999" forceWriten="true" style="height: 30px;width:50px;" />
+									</td>
+								</tr>	
+							</table>
+		         	</div>
+		         	<div class="row" style="margin-top: 34px;">
+		         		<std:button classStyle="btn btn-default shiny" style="margin-bottom: 9px;border-radius: 6px;box-shadow: 5px 10px 12px grey;height: 45px;font-size: 24px;font-weight: bold;" action="caisse-web.caisseWeb.validerPaiement" targetDiv="left-div" icon="" value="Valider la commande" />
+		         	</div>
+		         </div>	
+         	</div>
+		</div>	
+</std:form>
